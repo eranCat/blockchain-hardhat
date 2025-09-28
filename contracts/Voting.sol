@@ -1,118 +1,128 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { BALToken } from "./BALToken.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-/**
- * @title Voting
- * @dev A voting contract with:
- *  - Admin can add candidates and set a Merkle root for eligible voters
- *  - Time-window for voting
- *  - Rewards: each eligible voter receives 10 BAL from BALToken
- *  - Supports querying ranking after campaign ends
- */
-contract Voting is Ownable {
-    struct Candidate {
-        string name;
-        uint256 votes;
-    }
+/// @dev Minimal interface for BAL token
+interface IBALToken {
+    function mint(address to, uint256 amount) external;
+}
 
-    bytes32 public votersMerkleRoot;
-    uint256 public startTime;
-    uint256 public endTime;
-    bool public resultsFinalized;
+// -----------------------------------------------------------------------------
+// Custom Errors
+// -----------------------------------------------------------------------------
+error VotingClosed();
+error WindowNotSet();
+error AlreadyVoted();
+error InvalidCandidate(uint256 candidateId);
+error InvalidProof();
+error ZeroLengthCandidates();
+error ZeroAddress();
+error BadWindow(uint64 start, uint64 end);
 
-    BALToken public immutable bal;
+// -----------------------------------------------------------------------------
+// Contract
+// -----------------------------------------------------------------------------
+contract Voting is Ownable, ReentrancyGuard {
+    // -------------------------------------------------------------------------
+    // Events
+    // -------------------------------------------------------------------------
+    event CandidatesSet(string[] names);
+    event MerkleRootSet(bytes32 root);
+    event WindowSet(uint64 start, uint64 end);
+    event Voted(address indexed voter, uint256 indexed candidateId);
+    event RewardMinted(address indexed to, uint256 amount);
 
-    Candidate[] public candidates;
+    // -------------------------------------------------------------------------
+    // Storage
+    // -------------------------------------------------------------------------
+    uint64 public start;
+    uint64 public end;
+    bytes32 public voterRoot;
+    string[] internal _candidates;
     mapping(address => bool) public hasVoted;
 
-    event CandidateAdded(uint256 indexed id, string name);
-    event ElectionWindowSet(uint256 start, uint256 end);
-    event Voted(address indexed voter, uint256 indexed candidateId);
-    event Finalized();
+    IBALToken public immutable balToken;
+    uint256 public immutable rewardAmount;
 
-    constructor(address owner_, address balAddress) Ownable(owner_) {
-        bal = BALToken(balAddress);
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
+    /// @param balAddress BAL token contract address
+    /// @param rewardPerVote Amount of tokens minted to each voter
+    constructor(address balAddress, uint256 rewardPerVote) Ownable(msg.sender) {
+        if (balAddress == address(0)) revert ZeroAddress();
+        balToken = IBALToken(balAddress);
+        rewardAmount = rewardPerVote;
     }
 
-    /** ADMIN FUNCTIONS **/
+    // -------------------------------------------------------------------------
+    // Admin (owner-only)
+    // -------------------------------------------------------------------------
+    function setCandidates(string[] calldata names) external onlyOwner {
+        if (names.length == 0) revert ZeroLengthCandidates();
 
-    function addCandidate(string calldata name) external onlyOwner {
-        candidates.push(Candidate(name, 0));
-        emit CandidateAdded(candidates.length - 1, name);
+        delete _candidates;
+        for (uint256 i = 0; i < names.length; i++) {
+            _candidates.push(names[i]);
+        }
+        emit CandidatesSet(names);
     }
 
-    function setVotersMerkleRoot(bytes32 root) external onlyOwner {
-        require(startTime == 0 || block.timestamp < startTime, "Already started");
-        votersMerkleRoot = root;
+    function setMerkleRoot(bytes32 root) external onlyOwner {
+        if (root == bytes32(0)) revert InvalidProof();
+        voterRoot = root;
+        emit MerkleRootSet(root);
     }
 
-    function setElectionWindow(uint256 _start, uint256 _end) external onlyOwner {
-        require(_end > _start, "End must be after start");
-        require(_start > block.timestamp, "Start must be future");
-        startTime = _start;
-        endTime = _end;
-        resultsFinalized = false;
-        emit ElectionWindowSet(_start, _end);
+    function setWindow(uint64 start_, uint64 end_) external onlyOwner {
+        if (end_ <= start_) revert BadWindow(start_, end_);
+        start = start_;
+        end = end_;
+        emit WindowSet(start_, end_);
     }
 
-    function finalizeResults() external onlyOwner {
-        require(endTime != 0 && block.timestamp > endTime, "Not ended yet");
-        resultsFinalized = true;
-        emit Finalized();
-    }
+    // -------------------------------------------------------------------------
+    // Voting
+    // -------------------------------------------------------------------------
+    function vote(uint256 candidateId, bytes32[] calldata proof) external nonReentrant {
+        if (start == 0 && end == 0) revert WindowNotSet();
+        if (block.timestamp < start || block.timestamp > end) revert VotingClosed();
+        if (hasVoted[msg.sender]) revert AlreadyVoted();
+        if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
 
-    /** VOTING **/
-
-    function vote(bytes32[] calldata proof, uint256 candidateId) external {
-        require(startTime != 0 && block.timestamp >= startTime && block.timestamp <= endTime, "Voting not open");
-        require(!hasVoted[msg.sender], "Already voted");
-        require(candidateId < candidates.length, "Invalid candidate");
-
-        // Verify the voter is in the Merkle tree
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
-        require(MerkleProof.verify(proof, votersMerkleRoot, leaf), "Not eligible");
+        if (!MerkleProof.verify(proof, voterRoot, leaf)) revert InvalidProof();
 
         hasVoted[msg.sender] = true;
-        candidates[candidateId].votes += 1;
 
-        // Reward 10 BAL tokens (assumes BAL has minting permission)
-        bal.mint(msg.sender, 10 * (10 ** bal.decimals()));
+        if (rewardAmount != 0) {
+            balToken.mint(msg.sender, rewardAmount);
+            emit RewardMinted(msg.sender, rewardAmount);
+        }
+
         emit Voted(msg.sender, candidateId);
     }
 
-    /** VIEW FUNCTIONS **/
-
-    function getCandidateCount() external view returns (uint256) {
-        return candidates.length;
+    // -------------------------------------------------------------------------
+    // Views
+    // -------------------------------------------------------------------------
+    function getCandidates() external view returns (string[] memory) {
+        return _candidates;
     }
 
-    function getCandidate(uint256 idx) external view returns (string memory name, uint256 votes) {
-        require(idx < candidates.length, "Index out of range");
-        Candidate storage c = candidates[idx];
-        return (c.name, c.votes);
+    function getCandidate(uint256 candidateId) external view returns (string memory) {
+        if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
+        return _candidates[candidateId];
     }
 
-    function getRanking() external view returns (Candidate[] memory) {
-        require(resultsFinalized, "Results not finalized");
-        // copy into memory
-        Candidate[] memory arr = new Candidate[](candidates.length);
-        for (uint i = 0; i < candidates.length; i++) {
-            arr[i] = candidates[i];
-        }
-        // simple sort (bubble/selection) descending by votes
-        for (uint i = 0; i < arr.length; i++) {
-            for (uint j = i + 1; j < arr.length; j++) {
-                if (arr[j].votes > arr[i].votes) {
-                    Candidate memory temp = arr[i];
-                    arr[i] = arr[j];
-                    arr[j] = temp;
-                }
-            }
-        }
-        return arr;
+    function candidateCount() external view returns (uint256) {
+        return _candidates.length;
+    }
+
+    function getWindow() external view returns (uint64, uint64) {
+        return (start, end);
     }
 }

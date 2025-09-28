@@ -9,9 +9,9 @@ describe("Voting e2e", () => {
         const bal = await viem.deployContract("contracts/BALToken.sol:BALToken", [
             "BAL (Eran)", "BAL", wallet.account.address,
         ]);
-
+        const rewardAmount = 1000n;
         const voting = await viem.deployContract("contracts/Voting.sol:Voting", [
-            wallet.account.address, bal.address,
+            bal.address, rewardAmount
         ]);
 
         await bal.write.setMinter([voting.address]);

@@ -1,6 +1,7 @@
 import "@nomicfoundation/hardhat-toolbox-viem";
 import type { HardhatUserConfig } from "hardhat/config";
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
+import hardhatToolboxViem from "@nomicfoundation/hardhat-toolbox-viem";
 
 import * as dotenv from "dotenv";
 dotenv.config(); // <<< this actually loads .env
@@ -14,7 +15,7 @@ if (!process.env.SEPOLIA_PRIVATE_KEY) {
 
 
 const config: HardhatUserConfig = {
-  plugins: [hardhatToolboxViemPlugin],
+  plugins: [hardhatToolboxViemPlugin, hardhatToolboxViem],
   solidity: {
     profiles: {
       default: {
