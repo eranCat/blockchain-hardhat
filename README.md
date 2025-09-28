@@ -206,3 +206,72 @@ README.md
 * OpenZeppelin v5 patterns (ERC721 `_update`, custom errors)
 * Hardhat Ignition for deploy/verify modules
 
+
+
+## Usage — Running the Voting Scripts (Local Network)
+
+### 📦 Prerequisites
+
+* Hardhat v3 with **@nomicfoundation/hardhat-viem** plugin configured
+* Contracts compiled & deployed (addresses available)
+* A `.env` file in your project root with the following:
+
+  ```ini
+  # Core deployed addresses
+  VOTING_ADDR=0xYourVotingContractAddress
+  CANDIDATE_NFT_ADDR=0xYourNFTContractAddress
+  PROOFS_PATH=./data/proofs/proofs.json
+
+  # Optional / scenario data
+  CANDIDATE_NAMES=Alice,Bob,Charlie
+  VOTER_MERKLE_ROOT=0x...
+  ELECTION_START_ISO=2025-10-01T09:00:00+03:00
+  ELECTION_END_ISO=2025-10-01T21:00:00+03:00
+  VOTER_ADDR=0xYourVoterAddress
+  CANDIDATE_ID=0
+  TO_ADDR=0xYourNFTRecipient
+  TOKEN_URI=https://ipfs.io/ipfs/YourTokenMetadata.json
+  ```
+
+### 🛠️ Run in order
+
+Run each script sequentially (PowerShell / Windows style shown):
+
+```powershell
+# 1. Show existing candidates (should be empty initially)
+npx hardhat run --network localhost "scripts/checkCandidates.ts"
+
+# 2. Set candidate list
+npx hardhat run --network localhost "scripts/addCandidate.ts"
+npx hardhat run --network localhost "scripts/checkCandidates.ts"
+
+# 3. Configure Merkle root for whitelist
+npx hardhat run --network localhost "scripts/setRoot.ts"
+
+# 4. Open election window
+npx hardhat run --network localhost "scripts/startElection.ts"
+
+# 5. Cast vote using proof
+npx hardhat run --network localhost "scripts/voteFromProof.ts"
+
+# 6. Get results
+npx hardtask run --network localhost "scripts/getResults.ts"
+
+# 7. (Optional) Mint a candidate NFT
+npx hardhat run --network localhost "scripts/mintCandidateNft.ts"
+```
+
+### ✅ Expected output summary
+
+| Step | Description     | Expected Output                                                |
+| ---- | --------------- | -------------------------------------------------------------- |
+| 1    | View candidates | `Candidates: []` (empty)                                       |
+| 2    | Set candidates  | A TX hash + success message                                    |
+| →    | Re-check        | `Candidates: ["Alice","Bob","Charlie"]`                        |
+| 3    | Set Merkle root | TX hash + confirmation                                         |
+| 4    | Set window      | TX hash + confirmation of start/end                            |
+| 5    | Vote            | TX hash + “Vote cast” confirmation                             |
+| 6    | Get results     | Table of candidate names (and votes, if structure supports it) |
+| 7    | Mint NFT        | TX hash + “Minted to …” message                                |
+
+⚠️ If any script fails due to a missing env (e.g. `Missing env: VOTING_ADDR`), ensure your `.env` file is loaded and includes that key.
