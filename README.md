@@ -1,57 +1,141 @@
-# Sample Hardhat 3 Beta Project (`node:test` and `viem`)
+## Prereqs
 
-This project showcases a Hardhat 3 Beta project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
+* Node.js 20+ (works great with Node 22).
+* Hardhat v3 with **Viem toolbox** (already installed by the init).
+* OpenZeppelin contracts for token/NFT (installed in this repo).
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Install & Compile
 
-## Project Overview
+```bash
+npm install
+npx hardhat compile
+```
 
-This example project includes:
+## Run tests
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
-
-## Usage
-
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
+```bash
 npx hardhat test
 ```
 
-You can also selectively run the Solidity or `node:test` tests:
+Hardhat v3’s `test` task uses Node’s built-in test runner under the hood (no Mocha needed). ([Hardhat][1])
 
-```shell
-npx hardhat test solidity
-npx hardhat test nodejs
+---
+
+## Networks & Secrets (Sepolia)
+
+Hardhat 3 uses **Configuration Variables** so you don’t need to hardcode secrets in the repo. By default, config variables are read from **environment variables**, and you can also store them encrypted using the **hardhat-keystore** plugin. ([Hardhat][2])
+
+We’ll use two variables:
+
+* `SEPOLIA_RPC_URL` — your HTTPS RPC endpoint (Infura/Alchemy/etc.)
+* `SEPOLIA_PRIVATE_KEY` — the private key of the funded Sepolia account used to deploy
+
+### Option A — Store secrets securely (recommended)
+
+1. Set your **RPC URL** as an environment variable (PowerShell example):
+
+```powershell
+$env:SEPOLIA_RPC_URL="https://sepolia.infura.io/v3/<YOUR_KEY>"
 ```
 
-### Make a deployment to Sepolia
+2. Store your **private key** in the **Hardhat keystore** (encrypted):
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
-
-To run the deployment to a local chain:
-
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
-```
-
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
-
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
-
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
+```bash
 npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+# paste your 0x... private key; choose a password when prompted
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
+`hardhat-keystore` will prompt you for a password and encrypt the value. On deploy, Hardhat asks for that password, decrypts the key, and uses it. ([Hardhat][2])
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
+### Option B — Use a `.env` file (simple)
+
+1. Install dotenv:
+
+```bash
+npm i dotenv
 ```
+
+2. Create a `.env` file in the project root:
+
+```ini
+SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/<YOUR_KEY>
+SEPOLIA_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+```
+
+3. Load it in your config (see config snippet below). (Environment variables are a first-class source for Hardhat configuration variables.) ([Hardhat][2])
+
+> If you see `Error HHE7: Configuration variable not found`, it means the variable (e.g., `SEPOLIA_PRIVATE_KEY`) wasn’t supplied by any source. Provide it via keystore or env and re-run. ([Hardhat][3])
+
+---
+
+## Hardhat config (make sure this matches)
+
+In `hardhat.config.ts`, use **Configuration Variables** so the same config works with keystore or env:
+
+```ts
+import "@nomicfoundation/hardhat-toolbox-viem";
+import "@nomicfoundation/hardhat-ignition";
+import { configVariable } from "hardhat/config";
+
+const config = {
+  solidity: { version: "0.8.28", settings: { optimizer: { enabled: true, runs: 200 } } },
+  networks: {
+    localhost: { url: "http://127.0.0.1:8545" },
+    sepolia: {
+      url: configVariable("SEPOLIA_RPC_URL"),
+      // You can pass a single private key string here. The keystore plugin will
+      // supply SEPOLIA_PRIVATE_KEY at runtime if you stored it with `hardhat keystore set`.
+      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+    },
+  },
+};
+export default config;
+```
+
+* **Why this works:** `configVariable("NAME")` tells Hardhat “I need `NAME` from any configured source.” By default, that means **environment variables**; when you also use **hardhat-keystore**, the plugin can supply values securely too. If it can’t find a value, you’ll get **HHE7**. ([Hardhat][2])
+
+---
+
+## Deploy with Ignition
+
+### Local
+
+```bash
+# terminal A
+npx hardhat node
+
+# terminal B
+npx hardhat ignition deploy ignition/modules/VotingModule.ts --network localhost
+```
+
+### Sepolia
+
+Make sure you set `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY` (via keystore or env), then:
+
+```bash
+npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
+```
+
+* You’ll be prompted for the **keystore password**, then Hardhat will send the transactions. Re-running the same deploy is idempotent—Ignition detects prior state and won’t resend. ([Hardhat][4])
+
+*(Optional)* To verify contracts on Etherscan during/after Ignition deploys, add your explorer key as another configuration variable (e.g., `ETHERSCAN_API_KEY`) and follow the “Verify with Ignition” guide. ([Hardhat][5])
+
+---
+
+## Common pitfalls
+
+* **HHE7 (config variable not found):** You didn’t provide one of the required variables. Set it via `hardhat keystore set <NAME>` or as an env var before running the task. ([Hardhat][3])
+* **Wrong config loaded:** Hardhat finds the **closest `hardhat.config.ts`** starting from your current directory. Run commands from the project root that contains your intended config. ([Hardhat][1])
+* **No artifact found:** If you see “artifact not found,” ensure the Solidity file lives under the configured `paths.sources` (default `contracts/`) and re-compile. (Use fully-qualified names like `"contracts/Voting.sol:Voting"` when needed.) ([Hardhat][1])
+
+---
+
+### TL;DR (Sepolia)
+
+1. **Set secrets**
+
+   * Keystore: `npx hardhat keystore set SEPOLIA_PRIVATE_KEY` (enter 0x… and a password)
+   * Env: `SEPOLIA_RPC_URL=…` (and optionally `SEPOLIA_PRIVATE_KEY=…` if not using keystore) ([Hardhat][2])
+2. **Deploy**
+   `npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia` ([Hardhat][4])
+

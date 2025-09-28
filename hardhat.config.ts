@@ -1,7 +1,17 @@
 import "@nomicfoundation/hardhat-toolbox-viem";
 import type { HardhatUserConfig } from "hardhat/config";
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
-import { configVariable } from "hardhat/config";
+
+import * as dotenv from "dotenv";
+dotenv.config(); // <<< this actually loads .env
+
+if (!process.env.SEPOLIA_RPC_URL) {
+  throw new Error("Missing SEPOLIA_RPC_URL in .env");
+}
+if (!process.env.SEPOLIA_PRIVATE_KEY) {
+  throw new Error("Missing SEPOLIA_PRIVATE_KEY in .env");
+}
+
 
 const config: HardhatUserConfig = {
   plugins: [hardhatToolboxViemPlugin],
@@ -33,8 +43,8 @@ const config: HardhatUserConfig = {
     sepolia: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      url: process.env.SEPOLIA_RPC_URL,
+      accounts: [process.env.SEPOLIA_PRIVATE_KEY],
     },
   },
 };
