@@ -18,3 +18,13 @@
 
 # Hardhat coverage reports
 /coverage
+
+# Environment files
+.env
+
+# Log files
+*.log
+npm-debug.log
+
+# OS-specific files
+.DS_Store
