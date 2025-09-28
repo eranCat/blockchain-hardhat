@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "clean": "rimraf cache dist artifacts build",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.ts"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-ignition": "^3.0.3",
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.0",
@@ -6,11 +12,13 @@
     "dotenv": "^17.2.2",
     "forge-std": "github:foundry-rs/forge-std#v1.9.4",
     "hardhat": "^3.0.6",
+    "rimraf": "^6.0.1",
     "typescript": "~5.8.0",
     "viem": "^2.37.9"
   },
   "type": "module",
   "dependencies": {
+    "@nomicfoundation/hardhat-verify": "^3.0.2",
     "@openzeppelin/contracts": "^5.4.0"
   }
 }
