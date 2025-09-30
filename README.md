@@ -10,6 +10,8 @@ A blockchain-based voting system with Merkle proof allowlist, ERC20 token reward
 - On-chain vote tallying
 - Admin controls for election setup
 - Candidate NFTs (optional, with royalty support)
+- React frontend with Wagmi integration
+- **Refactored Frontend Architecture**: Decoupled candidate listing from election results for improved performance and separation of concerns, utilizing the `getCandidates` view function and better error handling.
 
 ---
 
@@ -27,24 +29,38 @@ A blockchain-based voting system with Merkle proof allowlist, ERC20 token reward
 ```bash
 git clone <your-repo-url>
 cd <project-directory>
+
+# Install backend dependencies
 npm install
+
+# Install frontend dependencies
+cd frontend
+npm install
+cd ..
 ```
 
 ---
 
 ## Environment Setup
 
+### Backend Configuration
+
 Create a `.env` file in the project root (never commit this file):
 
 ```ini
 # Network Configuration
-SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
-SEPOLIA_PRIVATE_KEY=your_private_key_here
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/abcd1234efgh5678ijkl9012mnop3456
+# Alternative RPC (use if Alchemy rate limits hit):
+# SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+SEPOLIA_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
 # Contract Addresses (populated after deployment)
-VOTING_ADDR_SEPOLIA=0x...
-BAL_TOKEN_ADDR_SEPOLIA=0x...
-CANDIDATE_NFT_ADDR=0x...
+VOTING_ADDR_SEPOLIA=0x7178E35E5700b834eD44C555575de658559b93B9
+BAL_TOKEN_ADDR_SEPOLIA=0x17C73CE8C0A53DFA2716063ad3C9480d2D53A84C
+CANDIDATE_NFT_ADDR=0xa6dA07477e26003B6C4A22817bcEF7F6baBA3298
+
+# Deployment Block (for efficient event scanning)
+DEPLOYMENT_BLOCK=7123456
 
 # Election Configuration
 CANDIDATE_NAMES=Alice,Bob,Charlie
@@ -53,7 +69,7 @@ ELECTION_END_ISO=2025-10-31T21:00:00+03:00
 
 # Merkle Proof Configuration
 PROOFS_PATH=./data/proofs/proofs.json
-VOTER_MERKLE_ROOT=0x...
+VOTER_MERKLE_ROOT=0x07b8dcf94c0583ba667464444fb22a6e504684c9b63ba2c91e76a3e73dfe9197
 VOTERS_FILE=./data/voters.json
 
 # Voting Test Data
@@ -61,26 +77,59 @@ VOTER_ADDR=0x669b237a521621a7bc242a18b94f695f52340b9a
 CANDIDATE_ID=0
 
 # Optional
-ETHERSCAN_API_KEY=your_etherscan_api_key
-ALCHEMY_API_KEY=your_alchemy_api_key
+ETHERSCAN_API_KEY=ABC123DEF456GHI789JKL012MNO345PQR678
+ALCHEMY_API_KEY=abcd1234-efgh-5678-ijkl-9012mnop3456
 ```
+
+### Frontend Configuration
+
+Create a `frontend/.env.local` file (never commit this file):
+
+```ini
+# RPC and Network
+VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/abcd1234efgh5678ijkl9012mnop3456
+# Alternative RPC (use if Alchemy rate limits hit):
+# VITE_SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+
+# Contract Addresses (copy from backend .env after deployment)
+VITE_VOTING_CONTRACT_ADDRESS=0x7178E35E5700b834eD44C555575de658559b93B9
+VITE_BAL_TOKEN_CONTRACT_ADDRESS=0x17C73CE8C0A53DFA2716063ad3C9480d2D53A84C
+VITE_CANDIDATE_NFT_CONTRACT_ADDRESS=0xa6dA07477e26003B6C4A22817bcEF7F6baBA3298
+```
+
+### RPC Provider Notes
+
+**Alchemy vs Infura:**
+- **Alchemy** (default): Free tier includes 300M compute units/month
+- **Infura** (alternative): Free tier includes 100k requests/day
+
+**If you encounter rate limit errors (400 status code):**
+1. Sign up for a free Infura account at [infura.io](https://infura.io)
+2. Create a new project and copy your Project ID
+3. Update both `.env` and `frontend/.env.local`:
+   ```ini
+   SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+   VITE_SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+   ```
+4. Alternatively, you can use both providers and switch between them as needed
 
 ### Environment Variables Reference
 
-| Variable                 | Purpose                         | Example                                    | Required For              |
-| ------------------------ | ------------------------------- | ------------------------------------------ | ------------------------- |
-| `SEPOLIA_RPC_URL`        | Sepolia network endpoint        | `https://eth-sepolia.g.alchemy.com/v2/...` | All network operations    |
-| `SEPOLIA_PRIVATE_KEY`    | Deployer/admin wallet key       | `0xabc123...`                              | Deployment, admin scripts |
-| `VOTING_ADDR_SEPOLIA`    | Deployed Voting contract        | `0x7178E35E...`                            | All voting operations     |
-| `BAL_TOKEN_ADDR_SEPOLIA` | Deployed BALToken contract      | `0x17C73CE8...`                            | Token operations          |
-| `CANDIDATE_NFT_ADDR`     | Deployed CandidateNFT contract  | `0xa6dA0747...`                            | NFT operations            |
-| `CANDIDATE_NAMES`        | Comma-separated candidate list  | `Alice,Bob,Charlie`                        | `addCandidate.ts`         |
-| `ELECTION_START_ISO`     | Voting start time               | `2025-10-01T09:00:00+03:00`                | `startElection.ts`        |
-| `ELECTION_END_ISO`       | Voting end time                 | `2025-10-31T21:00:00+03:00`                | `startElection.ts`        |
-| `VOTER_MERKLE_ROOT`      | Merkle root of voter allowlist  | `0x07b8dcf9...`                            | `setRoot.ts`              |
-| `VOTER_ADDR`             | Test voter address              | `0x669b237a...`                            | `voteFromProof.ts`        |
-| `CANDIDATE_ID`           | Candidate to vote for (0-based) | `0` (Alice), `1` (Bob), `2` (Charlie)      | `voteFromProof.ts`        |
-| `PROOFS_PATH`            | Path to generated proofs        | `./data/proofs/proofs.json`                | `voteFromProof.ts`        |
+| Variable                 | Purpose                         | Example                                    | Required For                    |
+| :----------------------- | :------------------------------ | :----------------------------------------- | :------------------------------ |
+| `SEPOLIA_RPC_URL`        | Sepolia network endpoint        | `https://eth-sepolia.g.alchemy.com/v2/...` | All network operations          |
+| `SEPOLIA_PRIVATE_KEY`    | Deployer/admin wallet key       | `0xac0974bec39a17e36ba4a...`               | Deployment, admin scripts       |
+| `VOTING_ADDR_SEPOLIA`    | Deployed Voting contract        | `0x7178E35E...`                            | All voting operations           |
+| `BAL_TOKEN_ADDR_SEPOLIA` | Deployed BALToken contract      | `0x17C73CE8...`                            | Token operations                |
+| `CANDIDATE_NFT_ADDR`     | Deployed CandidateNFT contract  | `0xa6dA0747...`                            | NFT operations                  |
+| `DEPLOYMENT_BLOCK`       | Block number of deployment      | `7123456`                                  | `checkResults.ts` (recommended) |
+| `CANDIDATE_NAMES`        | Comma-separated candidate list  | `Alice,Bob,Charlie`                        | `addCandidate.ts`               |
+| `ELECTION_START_ISO`     | Voting start time               | `2025-10-01T09:00:00+03:00`                | `startElection.ts`              |
+| `ELECTION_END_ISO`       | Voting end time                 | `2025-10-31T21:00:00+03:00`                | `startElection.ts`              |
+| `VOTER_MERKLE_ROOT`      | Merkle root of voter allowlist  | `0x07b8dcf9...`                            | `setRoot.ts`                    |
+| `VOTER_ADDR`             | Test voter address              | `0x669b237a...`                            | `voteFromProof.ts`              |
+| `CANDIDATE_ID`           | Candidate to vote for (0-based) | `0` (Alice), `1` (Bob), `2` (Charlie)      | `voteFromProof.ts`              |
+| `PROOFS_PATH`            | Path to generated proofs        | `./data/proofs/proofs.json`                | `voteFromProof.ts`              |
 
 ---
 
@@ -98,10 +147,17 @@ npx hardhat compile
 npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
 ```
 
-Save the three contract addresses that are output:
-- `BALToken`: Update `BAL_TOKEN_ADDR_SEPOLIA` in `.env`
-- `CandidateNFT`: Update `CANDIDATE_NFT_ADDR` in `.env`
-- `Voting`: Update `VOTING_ADDR_SEPOLIA` in `.env`
+**Important:** After deployment, note the deployment block number from the console output or check on Etherscan. Add it to your `.env`:
+
+```ini
+DEPLOYMENT_BLOCK=7123456
+```
+
+Save the three contract addresses and update both `.env` and `frontend/.env.local`:
+
+- `BALToken`: Update `BAL_TOKEN_ADDR_SEPOLIA` and `VITE_BAL_TOKEN_CONTRACT_ADDRESS`
+- `CandidateNFT`: Update `CANDIDATE_NFT_ADDR` and `VITE_CANDIDATE_NFT_CONTRACT_ADDRESS`
+- `Voting`: Update `VOTING_ADDR_SEPOLIA` and `VITE_VOTING_CONTRACT_ADDRESS`
 
 ### 3. Initialize the Election
 
@@ -127,7 +183,17 @@ npx hardhat run --network sepolia scripts/setRoot.ts
 npx hardhat run --network sepolia scripts/setMinter.ts
 ```
 
-### 4. Verify Setup
+### 4. Setup Frontend Contract ABIs
+
+Copy the contract ABIs to the frontend:
+
+```bash
+# From project root
+cp artifacts/contracts/Voting.sol/Voting.json frontend/src/contracts/
+cp artifacts/contracts/BALToken.sol/BALToken.json frontend/src/contracts/
+```
+
+### 5. Verify Setup
 
 ```bash
 # Check candidates
@@ -140,7 +206,16 @@ npx hardhat run --network sepolia scripts/checkWindow.ts
 npx hardhat run --network sepolia scripts/checkResults.ts
 ```
 
-### 5. Cast a Test Vote
+### 6. Start the Frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+Visit `http://localhost:5173` to use the DApp!
+
+### 7. Cast a Test Vote (Optional - CLI)
 
 Make sure your `VOTER_ADDR` is in the `data/voters.json` file used to generate proofs.
 
@@ -149,7 +224,7 @@ Make sure your `VOTER_ADDR` is in the `data/voters.json` file used to generate p
 npx hardhat run --network sepolia scripts/voteFromProof.ts
 ```
 
-### 6. Check Results
+### 8. Check Results
 
 ```bash
 # View vote tallies
@@ -161,213 +236,241 @@ npx hardhat run --network sepolia scripts/checkBALBalance.ts
 
 ---
 
-## Script Reference
-
-### Admin Scripts
-
-| Script             | Purpose                                          | Required Env Vars                                               |
-| ------------------ | ------------------------------------------------ | --------------------------------------------------------------- |
-| `addCandidate.ts`  | Set/update candidate list                        | `CANDIDATE_NAMES`, `VOTING_ADDR_SEPOLIA`                        |
-| `startElection.ts` | Set voting time window                           | `ELECTION_START_ISO`, `ELECTION_END_ISO`, `VOTING_ADDR_SEPOLIA` |
-| `setRoot.ts`       | Set Merkle root for voter allowlist              | `VOTER_MERKLE_ROOT`, `VOTING_ADDR_SEPOLIA`                      |
-| `setMinter.ts`     | Grant BALToken minting rights to Voting contract | `BAL_TOKEN_ADDR_SEPOLIA`, `VOTING_ADDR_SEPOLIA`                 |
-
-### Verification Scripts
-
-| Script               | Purpose                 | Required Env Vars                      |
-| -------------------- | ----------------------- | -------------------------------------- |
-| `checkCandidates.ts` | View current candidates | `VOTING_ADDR_SEPOLIA`                  |
-| `checkWindow.ts`     | View voting time window | `VOTING_ADDR_SEPOLIA`                  |
-| `checkResults.ts`    | View vote tallies       | `VOTING_ADDR_SEPOLIA`                  |
-| `checkBALBalance.ts` | Check BAL token balance | `BAL_TOKEN_ADDR_SEPOLIA`, `VOTER_ADDR` |
-
-### Voter Scripts
-
-| Script              | Purpose                                | Required Env Vars                                                  |
-| ------------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| `generateProofs.ts` | Generate Merkle proofs from voter list | `VOTERS_FILE` or `--voters` flag                                   |
-| `voteFromProof.ts`  | Submit a vote with Merkle proof        | `VOTER_ADDR`, `CANDIDATE_ID`, `PROOFS_PATH`, `VOTING_ADDR_SEPOLIA` |
-
----
-
-## Adding Voters to Allowlist
-
-### Method 1: Manual List (Recommended for Testing)
-
-Create `data/voters.json`:
-
-```json
-[
-  "0x669b237a521621a7bc242a18b94f695f52340b9a",
-  "0xAnotherAddress",
-  "0xYetAnotherAddress"
-]
-```
-
-Then generate proofs:
-
-```bash
-npx hardhat run scripts/generateProofs.ts
-```
-
-### Method 2: NFT Holders (Requires Alchemy API Key)
-
-To use NFT holders as the voter allowlist:
-
-```bash
-npx hardhat run scripts/generateProofs.ts --nft-contract 0xYourNFTAddress
-```
-
-This fetches all current owners of the NFT contract and generates proofs for them.
-
----
-
-## Deployment Checklist
-
-- [ ] Contracts compiled successfully
-- [ ] Deployed to Sepolia (3 contract addresses saved)
-- [ ] Environment variables updated in `.env`
-- [ ] Candidates set via `addCandidate.ts`
-- [ ] Voting window set via `startElection.ts`
-- [ ] Voter list created in `data/voters.json`
-- [ ] Merkle proofs generated
-- [ ] Merkle root set on-chain via `setRoot.ts`
-- [ ] Minter permission granted via `setMinter.ts`
-- [ ] Test vote successful
-- [ ] Results display correctly
-
----
-
-## Contract Addresses (Example - Update After Deployment)
-
-Network: Sepolia Testnet
-
-| Contract     | Address                                      |
-| ------------ | -------------------------------------------- |
-| Voting       | `0x7178E35Ea61ee99B60bB5D53Ec055Bf0F236175C` |
-| BALToken     | `0x17C73CE888A41e4fdde7263395Fe5E000cdeb0f0` |
-| CandidateNFT | `0xa6dA074720d79814B3C5Dce94AC502DCeb4afb04` |
-
-View on Etherscan:
-- [Voting Contract](https://sepolia.etherscan.io/address/0x7178E35Ea61ee99B60bB5D53Ec055Bf0F236175C)
-- [BALToken](https://sepolia.etherscan.io/address/0x17C73CE888A41e4fdde7263395Fe5E000cdeb0f0)
-
----
-
 ## Troubleshooting
 
-### "AlreadyVoted()" Error
-Each address can only vote once. Use a different wallet address or redeploy the contract for testing.
+### RPC Rate Limit Errors
 
-### "InvalidProof()" Error
-- Ensure your address is in `data/voters.json`
-- Regenerate proofs after modifying the voter list
-- Update the Merkle root on-chain with `setRoot.ts`
+If you see errors like `Received an unexpected status code` or `rate limit`:
 
-### "VotingClosed()" Error
-Check the voting window with `checkWindow.ts`. Ensure current time is between start and end times.
+1. **Add deployment block** to `.env`:
+   ```ini
+   DEPLOYMENT_BLOCK=7123456
+   ```
+   
+2. **Switch to Infura**:
+   - Get free API key at [infura.io](https://infura.io)
+   - Update RPC URL in `.env` and `frontend/.env.local`
+   
+3. **Use paid RPC tier** for production applications
 
-### "Missing env: VOTING_ADDR" Error
-Make sure you're using `VOTING_ADDR_SEPOLIA` for Sepolia network operations.
+### MetaMask Connection Issues
 
-### Contract Functions Not Found
-After updating contracts, ensure you:
-1. Recompile: `npx hardhat compile`
-2. Redeploy to get a new contract instance (old deployments won't have new functions)
+- Ensure you're on Sepolia testnet
+- Reset account in MetaMask settings if transactions are stuck
+- Clear browser cache and reload
+
+### Transaction Failures
+
+- Check you have enough Sepolia ETH for gas
+- Verify you're within the voting window
+- Ensure you haven't voted already
+- Confirm your address is in the voter allowlist
 
 ---
 
-## Development Workflow
+## Frontend Setup & Usage
+
+### Directory Structure
+
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── ConnectWallet.tsx      # Wallet connection
+│   │   ├── ElectionStatus.tsx     # Voting window status
+│   │   ├── CandidateList.tsx      # Voting interface
+│   │   └── BALBalance.tsx         # Token balance display
+│   ├── contracts/
+│   │   ├── index.ts               # ABI exports
+│   │   ├── Voting.json            # Voting contract ABI
+│   │   └── BALToken.json          # BAL token ABI
+│   ├── App.tsx                     # Main app component
+│   ├── main.tsx                    # Entry point with Wagmi config
+│   └── index.css                   # Styles
+├── .env.local                      # Environment variables (DO NOT COMMIT)
+└── package.json
+```
+
+### Required Frontend Dependencies
+
+The frontend uses the following key dependencies:
+
+```json
+{
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "wagmi": "^2.x",
+    "viem": "^2.x",
+    "@tanstack/react-query": "^5.x"
+  }
+}
+```
+
+### Wagmi Configuration (`main.tsx`)
+
+```typescript
+import { WagmiProvider, createConfig, http } from 'wagmi';
+import { sepolia } from 'wagmi/chains';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
+const config = createConfig({
+    chains: [sepolia],
+    transports: {
+        [sepolia.id]: http(import.meta.env.VITE_SEPOLIA_RPC_URL),
+    },
+});
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+        <WagmiProvider config={config}>
+            <QueryClientProvider client={queryClient}>
+                <App />
+            </QueryClientProvider>
+        </WagmiProvider>
+    </React.StrictMode>,
+);
+```
+
+### Contract ABI Setup (`contracts/index.ts`)
+
+```typescript
+import VotingABI from './Voting.json';
+import BALTokenABI from './BALToken.json';
+
+export const votingABI = VotingABI.abi;
+export const balTokenABI = BALTokenABI.abi;
+```
+
+### Frontend Components Overview
+
+#### 1. ConnectWallet Component
+
+- Connects/disconnects MetaMask wallet
+- Displays connected address
+- Shows connection status
+
+#### 2. ElectionStatus Component
+
+- Displays voting window (start/end times)
+- Shows election status (pending/active/ended)
+- Real-time status updates
+
+#### 3. CandidateList Component
+
+- Lists all candidates
+- Allows proof file upload
+- Enables voting with Merkle proof verification
+- Shows transaction status
+- *Note: Live vote counts and progress bars have been removed from this component to separate the voting interface from the election results.*
+
+#### 4. BALBalance Component
+
+- Shows user's BAL token balance
+- Updates after successful votes
+- Displays earned rewards
+
+### User Workflow
+
+1. **Connect Wallet**
+   - Click "Connect Wallet" button
+   - Approve MetaMask connection
+   - Ensure you're on Sepolia testnet
+
+2. **View Election Status**
+   - See voting window (pending/active/ended)
+   - Check start and end times
+   - View your BAL token balance
+
+3. **Upload Proof & Vote**
+   - Upload your `proofs.json` file
+   - Review all candidates
+   - Click "Vote for this Candidate"
+   - Confirm transaction in MetaMask
+   - Receive BAL tokens automatically
+
+4. **View Results**
+   - *Note: Live results are now only available via the Hardhat CLI script (`checkResults.ts`) until a dedicated results component is built.*
+   - Run: `npx hardhat run --network sepolia scripts/checkResults.ts`
+
+### Voter Proof Distribution
+
+Generate and distribute proof files to voters:
 
 ```bash
-# Clean build artifacts
-npm run clean
+# Generate proofs
+npx hardhat run scripts/generateProofs.ts
 
-# Compile contracts
-npm run compile
-
-# Run tests
-npm run test
-
-# Deploy to local network
-npx hardhat ignition deploy ignition/modules/VotingModule.ts
-
-# Deploy to Sepolia
-npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
+# The proofs.json file will be at: data/proofs/proofs.json
+# Distribute this file to voters, or provide individual proofs per address
 ```
 
+**Proof File Format:**
 
-## Project Structure
-
-```
-├── contracts/
-│   ├── Voting.sol              # Main voting contract
-│   ├── BALToken.sol           # ERC20 reward token
-│   └── CandidateNFT.sol       # NFT for candidates
-├── ignition/
-│   └── modules/
-│       └── VotingModule.ts    # Deployment module
-├── scripts/
-│   ├── addCandidate.ts        # Set candidates
-│   ├── startElection.ts       # Set voting window
-│   ├── setRoot.ts             # Set Merkle root
-│   ├── setMinter.ts           # Grant minting permission
-│   ├── generateProofs.ts      # Generate Merkle proofs
-│   ├── voteFromProof.ts       # Cast a vote
-│   ├── checkCandidates.ts     # View candidates
-│   ├── checkWindow.ts         # View voting window
-│   ├── checkResults.ts        # View vote tallies
-│   ├── checkBALBalance.ts     # Check token balance
-│   ├── utils.ts               # Shared utilities
-│   ├── abi-introspect.ts
-│   ├── check-viem.ts
-│   ├── checkProofs.ts
-│   ├── checkStatus.ts
-│   ├── debugVoting.ts
-│   ├── fetchVotersFromNFT.ts
-│   ├── getResults.ts
-│   ├── mintCandidateNft.ts
-│   ├── print-deployer.js
-│   ├── send-op-tx.ts
-│   └── vote.ts
-├── data/
-│   ├── voters.json            # List of eligible voters
-│   └── proofs/
-│       ├── proofs.json        # Generated Merkle proofs
-│       └── root.txt           # Merkle root hash
-├── test/                       # Contract tests
-├── .env                        # Environment variables (DO NOT COMMIT)
-├── hardhat.config.ts          # Hardhat configuration
-└── README.md                  # This file
+```json
+{
+  "0x669b237a521621a7bc242a18b94f695f52340b9a": [
+    "0xproof1...",
+    "0xproof2...",
+    "0xproof3..."
+  ],
+  "0xAnotherAddress...": [
+    "0xproof1...",
+    "0xproof2..."
+  ]
+}
 ```
 
+---
 
+## Future Improvements
 
-## Security Notes
+- [ ] Implement result charts and data visualizations
+- [ ] Create admin dashboard for election management
+- [ ] Add voting history and audit trail
+- [ ] Implement multi-language support
+- [ ] Add dark mode theme
+- [ ] Create mobile app version (React Native)
+- [ ] Add email/SMS notifications for election events
+- [ ] Implement delegated voting mechanisms
+- [ ] Add ranked-choice voting option
+- [ ] Create analytics dashboard for administrators
+- [ ] Implement gasless transactions (meta-transactions)
+- [ ] Add IPFS integration for decentralized proof storage
+- [ ] Optimize event scanning with on-chain vote counters
 
-- Never commit `.env` file (contains private keys)
-- Never share your private key
-- Use testnet for development
-- Audit contracts before mainnet deployment
-- Keep Merkle proofs secure (they prove voting eligibility)
+---
 
+## Testing
 
+Run the test suite:
 
-## Next Steps
+```bash
+# Run all tests
+npx hardhat test
 
-1. Build a frontend UI (React + Web3.js or Viem)
-2. Add result visualization
-3. Implement admin dashboard
-4. Add event logging and notifications
-5. Deploy to mainnet (after thorough testing)
+# Run with coverage
+npx hardhat coverage
 
+# Run specific test file
+npx hardhat test test/Voting.test.ts
 
+# Run tests with gas reporting
+REPORT_GAS=true npx hardhat test
+```
+
+---
 
 ## Resources
 
 - [Hardhat Documentation](https://hardhat.org/docs)
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
+- [Wagmi Documentation](https://wagmi.sh)
 - [Viem Documentation](https://viem.sh)
 - [Merkle Trees Explained](https://en.wikipedia.org/wiki/Merkle_tree)
 - [Sepolia Faucet](https://sepoliafaucet.com)
-
+- [Etherscan Sepolia](https://sepolia.etherscan.io)
+- [Alchemy](https://www.alchemy.com/)
+- [Infura](https://infura.io/)

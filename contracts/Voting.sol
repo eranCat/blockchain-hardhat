@@ -43,7 +43,7 @@ contract Voting is Ownable, ReentrancyGuard {
     bytes32 public voterRoot;
     string[] internal _candidates;
     mapping(address => bool) public hasVoted;
-    mapping(uint256 => uint256) public voteCounts;  // NEW: Track votes per candidate
+    mapping(uint256 => uint256) public voteCounts; // NEW: Track votes per candidate
 
     IBALToken public immutable balToken;
     uint256 public immutable rewardAmount;
@@ -88,17 +88,22 @@ contract Voting is Ownable, ReentrancyGuard {
     // -------------------------------------------------------------------------
     // Voting
     // -------------------------------------------------------------------------
-    function vote(uint256 candidateId, bytes32[] calldata proof) external nonReentrant {
+    function vote(
+        uint256 candidateId,
+        bytes32[] calldata proof
+    ) external nonReentrant {
         if (start == 0 && end == 0) revert WindowNotSet();
-        if (block.timestamp < start || block.timestamp > end) revert VotingClosed();
+        if (block.timestamp < start || block.timestamp > end)
+            revert VotingClosed();
         if (hasVoted[msg.sender]) revert AlreadyVoted();
-        if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
+        if (candidateId >= _candidates.length)
+            revert InvalidCandidate(candidateId);
 
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
         if (!MerkleProof.verify(proof, voterRoot, leaf)) revert InvalidProof();
 
         hasVoted[msg.sender] = true;
-        voteCounts[candidateId]++;  // NEW: Increment vote count
+        voteCounts[candidateId]++; // NEW: Increment vote count
 
         if (rewardAmount != 0) {
             balToken.mint(msg.sender, rewardAmount);
@@ -115,8 +120,11 @@ contract Voting is Ownable, ReentrancyGuard {
         return _candidates;
     }
 
-    function getCandidate(uint256 candidateId) external view returns (string memory) {
-        if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
+    function getCandidate(
+        uint256 candidateId
+    ) external view returns (string memory) {
+        if (candidateId >= _candidates.length)
+            revert InvalidCandidate(candidateId);
         return _candidates[candidateId];
     }
 
@@ -128,14 +136,22 @@ contract Voting is Ownable, ReentrancyGuard {
         return (start, end);
     }
 
-    // NEW: Get vote count for a candidate
     function getVotes(uint256 candidateId) external view returns (uint256) {
-        if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
+        if (candidateId >= _candidates.length)
+            revert InvalidCandidate(candidateId);
         return voteCounts[candidateId];
     }
 
-    // NEW: Get results for all candidates
-    function getResults() external view returns (string[] memory candidates, uint256[] memory votes) {
+    function getResults()
+        external
+        view
+        returns (string[] memory candidates, uint256[] memory votes)
+    {
+        // when a dynamic array storage slot has never been initialized via a transaction.
+        if (_candidates.length == 0) {
+            return (new string[](0), new uint256[](0));
+        }
+
         candidates = _candidates;
         votes = new uint256[](_candidates.length);
         for (uint256 i = 0; i < _candidates.length; i++) {

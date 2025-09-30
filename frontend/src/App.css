@@ -1,0 +1,27 @@
+#root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Remove all default styles since we're using inline styles */
+.logo,
+.card,
+.read-the-docs {
+  display: none;
+}
+
+/* Keep animations for reference if needed */
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ensure smooth transitions */
+* {
+  transition: all 0.3s ease;
+}
