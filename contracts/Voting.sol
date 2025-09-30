@@ -128,13 +128,11 @@ contract Voting is Ownable, ReentrancyGuard {
         return (start, end);
     }
 
-    // NEW: Get vote count for a candidate
     function getVotes(uint256 candidateId) external view returns (uint256) {
         if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
         return voteCounts[candidateId];
     }
 
-    // NEW: Get results for all candidates
     function getResults() external view returns (string[] memory candidates, uint256[] memory votes) {
         candidates = _candidates;
         votes = new uint256[](_candidates.length);
