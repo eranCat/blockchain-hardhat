@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-import { WagmiProvider, createConfig, http } from 'wagmi';
+import { WagmiProvider, createConfig, http, injected } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -16,6 +16,7 @@ const rpcUrl = import.meta.env.VITE_SEPOLIA_RPC_URL;
 
 const config = createConfig({
   chains: [sepolia],
+  connectors: [injected()],
   transports: {
     [sepolia.id]: http(rpcUrl),
   },

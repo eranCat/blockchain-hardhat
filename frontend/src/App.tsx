@@ -2,7 +2,8 @@ import { ConnectWallet } from './components/ConnectWallet';
 import { ElectionStatus } from './components/ElectionStatus';
 import { CandidateList } from './components/CandidateList';
 import { BALBalance } from './components/BALBalance';
-import { ElectionResults } from './components/ElectionResults'; // NEW IMPORT
+import { ElectionResults } from './components/ElectionResults';
+import { AdminPanel } from './components/AdminPanel'; // NEW
 import { useState, useEffect } from 'react';
 
 function App() {
@@ -65,20 +66,21 @@ function App() {
             gridColumn: isMobile ? '1' : 'span 4',
             display: 'flex',
             flexDirection: 'column',
-            gap: '1.5rem' // Increased gap here for better spacing
+            gap: '1.5rem'
           }}>
+            <AdminPanel /> {/* NEW - Shows only to admin */}
             <ElectionStatus />
             <BALBalance />
           </div>
 
           <div style={{
             gridColumn: isMobile ? '1' : 'span 8',
-            display: 'flex', // NEW: Added display: flex and flexDirection: column
+            display: 'flex',
             flexDirection: 'column',
-            gap: '1.5rem' // NEW: Added gap to separate components
+            gap: '1.5rem'
           }}>
             <CandidateList />
-            <ElectionResults /> {/* NEW COMPONENT */}
+            <ElectionResults />
           </div>
         </div>
       </main>

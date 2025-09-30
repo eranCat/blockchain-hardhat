@@ -9,7 +9,7 @@ const votingContract = {
 
 export function ElectionStatus() {
     const [isMobile, setIsMobile] = useState(false);
-    const { data: windowData, isLoading, isError } = useReadContract({
+    const { data: windowData, isLoading, isError, refetch } = useReadContract({
         ...votingContract,
         functionName: 'getWindow',
     });
@@ -20,6 +20,14 @@ export function ElectionStatus() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Auto-refetch every 10 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refetch();
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [refetch]);
 
     const cardStyle = {
         padding: isMobile ? '1rem' : '1.5rem',
