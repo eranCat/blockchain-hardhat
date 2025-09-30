@@ -1,5 +1,6 @@
 import { useReadContract } from 'wagmi';
 import { votingABI } from '../contracts';
+import { useState, useEffect } from 'react';
 
 const votingContract = {
     address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
@@ -7,20 +8,36 @@ const votingContract = {
 } as const;
 
 export function ElectionStatus() {
+    const [isMobile, setIsMobile] = useState(false);
     const { data: windowData, isLoading, isError } = useReadContract({
         ...votingContract,
         functionName: 'getWindow',
     });
 
+    useEffect(() => {
+        setIsMobile(window.innerWidth < 768);
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const cardStyle = {
+        padding: isMobile ? '1rem' : '1.5rem',
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '16px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        animation: 'slideIn 0.5s ease-out'
+    };
+
     if (isLoading) {
         return (
-            <div style={{
-                padding: '1.5rem',
-                backgroundColor: 'white',
-                borderRadius: '12px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-            }}>
-                Loading election status...
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div className="spinner"></div>
+                    Loading election status...
+                </div>
             </div>
         );
     }
@@ -28,33 +45,17 @@ export function ElectionStatus() {
     if (isError || !windowData) {
         return (
             <div style={{
-                padding: '1.5rem',
+                ...cardStyle,
                 backgroundColor: '#fed7d7',
-                border: '1px solid #fc8181',
-                borderRadius: '12px',
+                border: '2px solid #fc8181',
                 color: '#c53030'
             }}>
-                ⚠️ Error loading election status. Please check your connection.
+                ⚠️ Error loading election status
             </div>
         );
     }
 
     const [startTime, endTime] = windowData as [bigint, bigint];
-
-    if (startTime === 0n && endTime === 0n) {
-        return (
-            <div style={{
-                padding: '1.5rem',
-                backgroundColor: '#feebc8',
-                border: '1px solid #f6ad55',
-                borderRadius: '12px',
-                color: '#c05621'
-            }}>
-                ⏳ Election window has not been set yet
-            </div>
-        );
-    }
-
     const now = Math.floor(Date.now() / 1000);
     const start = Number(startTime);
     const end = Number(endTime);
@@ -79,31 +80,37 @@ export function ElectionStatus() {
 
     const formatDate = (timestamp: number) => {
         return new Date(timestamp * 1000).toLocaleString('en-US', {
-            year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit',
-            timeZoneName: 'short'
+            minute: '2-digit'
         });
     };
 
     return (
         <div style={{
-            padding: '1.5rem',
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            ...cardStyle,
             border: `2px solid ${statusColor}`
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                marginBottom: '1rem'
+            }}>
+                <div className="pulse" style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: statusColor
+                }}></div>
                 <div style={{
-                    padding: '0.5rem 1rem',
+                    padding: '0.25rem 0.75rem',
                     backgroundColor: statusBg,
                     color: statusColor,
                     borderRadius: '6px',
                     fontWeight: '700',
-                    fontSize: '1.125rem'
+                    fontSize: isMobile ? '0.875rem' : '1rem'
                 }}>
                     {status === 'pending' && '⏳ Starting Soon'}
                     {status === 'active' && '✅ Voting Open'}
@@ -111,7 +118,12 @@ export function ElectionStatus() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gap: '0.75rem', fontSize: '0.875rem', color: '#4a5568' }}>
+            <div style={{
+                display: 'grid',
+                gap: '0.75rem',
+                fontSize: isMobile ? '0.75rem' : '0.875rem',
+                color: '#4a5568'
+            }}>
                 <div>
                     <strong>Start:</strong> {formatDate(start)}
                 </div>
@@ -123,11 +135,12 @@ export function ElectionStatus() {
                         marginTop: '0.5rem',
                         padding: '0.75rem',
                         backgroundColor: '#bee3f8',
-                        borderRadius: '6px',
+                        borderRadius: '8px',
                         color: '#2c5282',
-                        fontWeight: '600'
+                        fontWeight: '600',
+                        fontSize: isMobile ? '0.75rem' : '0.875rem'
                     }}>
-                        🗳️ Voting is currently open! Cast your vote now.
+                        🗳️ Cast your vote now!
                     </div>
                 )}
             </div>
