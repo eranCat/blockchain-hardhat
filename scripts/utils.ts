@@ -54,10 +54,28 @@ export async function waitForReceipt(hash: Hash) {
 
 /** Typed contract getters (via hardhat-viem) */
 export async function getVotingContract() {
-    const addr = requireEnv("VOTING_ADDR") as Address;
+    // Resolve network-specific address
+    const networkArg = process.argv.find((arg, i) =>
+        process.argv[i - 1] === "--network"
+    )?.toUpperCase();
+
+    const scopedKey = networkArg ? `VOTING_ADDR_${networkArg}` : "";
+    const addr = (
+        (scopedKey && process.env[scopedKey]) ||
+        process.env.VOTING_ADDR ||
+        ""
+    ).trim();
+
+    if (!addr) {
+        throw new Error(`Missing env: ${scopedKey || "VOTING_ADDR"}`);
+    }
+
+    console.log(`[env] Network=${networkArg || "(default)"} using address=${addr}`);
+
     const { viem } = await network.connect();
-    return viem.getContractAt("Voting", addr);
+    return viem.getContractAt("Voting", addr as Address);
 }
+
 export async function getCandidateNftContract() {
     const addr = requireEnv("CANDIDATE_NFT_ADDR") as Address;
     const { viem } = await network.connect();

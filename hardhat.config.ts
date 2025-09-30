@@ -48,6 +48,9 @@ const config: HardhatUserConfig = {
       accounts: [process.env.SEPOLIA_PRIVATE_KEY],
     },
   },
+  ignition: {
+    requiredConfirmations: 1,
+  },
 };
 
 export default config;

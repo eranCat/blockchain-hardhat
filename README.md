@@ -1,277 +1,373 @@
-# Voting Project with BALToken & Merkle Proofs
+# Voting DApp - 2025 Elections
 
-A minimal voting system: owner publishes candidates + Merkle root, users submit votes via proof, winners get BAL token rewards. Includes smart contracts, deployment, and frontend.
+A blockchain-based voting system with Merkle proof allowlist, ERC20 token rewards, and on-chain vote counting.
+
+## Features
+
+- Merkle tree-based voter allowlist (privacy-preserving eligibility)
+- Time-windowed voting periods
+- BAL token rewards for voters (ERC20)
+- On-chain vote tallying
+- Admin controls for election setup
+- Candidate NFTs (optional, with royalty support)
 
 ---
 
 ## Prerequisites
 
-- Node.js ≥ 18  
-- npm (or pnpm / yarn)  
-- A `.env` file in project root with:
-
-```
-
-SEPOLIA_RPC_URL=<your Sepolia JSON-RPC endpoint>
-PRIVATE_KEY=<your deployer / admin private key>
-ETHERSCAN_API_KEY=<your Etherscan API key>
-
-````
-
-- Add `.env` to `.gitignore` (do **not** commit secrets).
+- Node.js ≥ 18
+- npm (or pnpm/yarn)
+- MetaMask or similar Web3 wallet
+- Sepolia testnet ETH (get from [Sepolia faucet](https://sepoliafaucet.com))
 
 ---
 
 ## Installation
 
 ```bash
+git clone <your-repo-url>
+cd <project-directory>
 npm install
-````
-
-If you haven’t yet, also enable Hardhat + Viem plugin (see below).
+```
 
 ---
 
-## Hardhat & Viem Setup
+## Environment Setup
 
-We use the `@nomicfoundation/hardhat-viem` plugin so you can use `hre.viem` helpers for reading/writing contracts. ([Hardhat][1])
+Create a `.env` file in the project root (never commit this file):
 
-In your `hardhat.config.ts`, ensure:
+```ini
+# Network Configuration
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+SEPOLIA_PRIVATE_KEY=your_private_key_here
 
-```ts
-import "@nomicfoundation/hardhat-viem";
-// … other imports
+# Contract Addresses (populated after deployment)
+VOTING_ADDR_SEPOLIA=0x...
+BAL_TOKEN_ADDR_SEPOLIA=0x...
+CANDIDATE_NFT_ADDR=0x...
 
-const config: HardhatUserConfig = {
-  // solidity, networks, etc.
-  plugins: [
-    // … other plugins
-    "@nomicfoundation/hardhat-viem",
-  ],
-  networks: {
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL,
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 11155111,
-    },
-    // other networks...
-  },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
-  },
-};
+# Election Configuration
+CANDIDATE_NAMES=Alice,Bob,Charlie
+ELECTION_START_ISO=2025-10-01T09:00:00+03:00
+ELECTION_END_ISO=2025-10-31T21:00:00+03:00
 
-export default config;
+# Merkle Proof Configuration
+PROOFS_PATH=./data/proofs/proofs.json
+VOTER_MERKLE_ROOT=0x...
+VOTERS_FILE=./data/voters.json
+
+# Voting Test Data
+VOTER_ADDR=0x669b237a521621a7bc242a18b94f695f52340b9a
+CANDIDATE_ID=0
+
+# Optional
+ETHERSCAN_API_KEY=your_etherscan_api_key
+ALCHEMY_API_KEY=your_alchemy_api_key
 ```
 
-After this, in scripts/tests you can do:
+### Environment Variables Reference
 
-```ts
-const { viem } = await network.connect();
-const publicClient = await viem.getPublicClient();
-const [walletClient] = await viem.getWalletClients();
-const myContract = await viem.deployContract("Voting", [/* args */]);
-
-await myContract.write.vote([proof]);
-const result = await myContract.read.getResult();
-```
-
-This approach is described in the docs. ([v2.hardhat.org][2])
+| Variable                 | Purpose                         | Example                                    | Required For              |
+| ------------------------ | ------------------------------- | ------------------------------------------ | ------------------------- |
+| `SEPOLIA_RPC_URL`        | Sepolia network endpoint        | `https://eth-sepolia.g.alchemy.com/v2/...` | All network operations    |
+| `SEPOLIA_PRIVATE_KEY`    | Deployer/admin wallet key       | `0xabc123...`                              | Deployment, admin scripts |
+| `VOTING_ADDR_SEPOLIA`    | Deployed Voting contract        | `0x7178E35E...`                            | All voting operations     |
+| `BAL_TOKEN_ADDR_SEPOLIA` | Deployed BALToken contract      | `0x17C73CE8...`                            | Token operations          |
+| `CANDIDATE_NFT_ADDR`     | Deployed CandidateNFT contract  | `0xa6dA0747...`                            | NFT operations            |
+| `CANDIDATE_NAMES`        | Comma-separated candidate list  | `Alice,Bob,Charlie`                        | `addCandidate.ts`         |
+| `ELECTION_START_ISO`     | Voting start time               | `2025-10-01T09:00:00+03:00`                | `startElection.ts`        |
+| `ELECTION_END_ISO`       | Voting end time                 | `2025-10-31T21:00:00+03:00`                | `startElection.ts`        |
+| `VOTER_MERKLE_ROOT`      | Merkle root of voter allowlist  | `0x07b8dcf9...`                            | `setRoot.ts`              |
+| `VOTER_ADDR`             | Test voter address              | `0x669b237a...`                            | `voteFromProof.ts`        |
+| `CANDIDATE_ID`           | Candidate to vote for (0-based) | `0` (Alice), `1` (Bob), `2` (Charlie)      | `voteFromProof.ts`        |
+| `PROOFS_PATH`            | Path to generated proofs        | `./data/proofs/proofs.json`                | `voteFromProof.ts`        |
 
 ---
 
-## 📄 Scripts (npm)
+## Quick Start Guide
 
-These scripts streamline dev & release tasks:
-
-| Script                                  | Description                                                        | Usage                                 |
-| --------------------------------------- | ------------------------------------------------------------------ | ------------------------------------- |
-| `npm run clean`                         | Deletes build artifacts: `cache/`, `dist/`, `artifacts/`, `build/` | `npm run clean`                       |
-| `npm run compile`                       | Compile contracts via Hardhat                                      | `npm run compile`                     |
-| `npm run test`                          | Run full test suite (unit & integration)                           | `npm run test`                        |
-| `npm run deploy -- --network <network>` | Deploy your contracts / modules to a specified network             | `npm run deploy -- --network sepolia` |
-| `npm run full`                          | Alias: clean → compile → test in sequence                          | `npm run full`                        |
-
-> **Note:** The `clean` script uses `npx rimraf` for cross-platform deletion. Make sure `rimraf` is installed as dev dependency:
+### 1. Compile Contracts
 
 ```bash
-npm install --save-dev rimraf
+npx hardhat compile
+```
+
+### 2. Deploy to Sepolia
+
+```bash
+npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
+```
+
+Save the three contract addresses that are output:
+- `BALToken`: Update `BAL_TOKEN_ADDR_SEPOLIA` in `.env`
+- `CandidateNFT`: Update `CANDIDATE_NFT_ADDR` in `.env`
+- `Voting`: Update `VOTING_ADDR_SEPOLIA` in `.env`
+
+### 3. Initialize the Election
+
+Run these scripts in order:
+
+```bash
+# Step 1: Set candidates
+npx hardhat run --network sepolia scripts/addCandidate.ts
+
+# Step 2: Set voting time window
+npx hardhat run --network sepolia scripts/startElection.ts
+
+# Step 3: Generate Merkle proofs for eligible voters
+# First, create data/voters.json with voter addresses:
+# ["0xYourAddress1", "0xYourAddress2", ...]
+npx hardhat run scripts/generateProofs.ts
+
+# Step 4: Copy the root from data/proofs/root.txt to .env as VOTER_MERKLE_ROOT
+# Then set the Merkle root on-chain:
+npx hardhat run --network sepolia scripts/setRoot.ts
+
+# Step 5: Grant minting permission to Voting contract
+npx hardhat run --network sepolia scripts/setMinter.ts
+```
+
+### 4. Verify Setup
+
+```bash
+# Check candidates
+npx hardhat run --network sepolia scripts/checkCandidates.ts
+
+# Check voting window
+npx hardhat run --network sepolia scripts/checkWindow.ts
+
+# View results (should show 0 votes initially)
+npx hardhat run --network sepolia scripts/checkResults.ts
+```
+
+### 5. Cast a Test Vote
+
+Make sure your `VOTER_ADDR` is in the `data/voters.json` file used to generate proofs.
+
+```bash
+# Set CANDIDATE_ID in .env (0=Alice, 1=Bob, 2=Charlie)
+npx hardhat run --network sepolia scripts/voteFromProof.ts
+```
+
+### 6. Check Results
+
+```bash
+# View vote tallies
+npx hardhat run --network sepolia scripts/checkResults.ts
+
+# Check BAL token balance (reward)
+npx hardhat run --network sepolia scripts/checkBALBalance.ts
 ```
 
 ---
 
-## Example Workflow
+## Script Reference
+
+### Admin Scripts
+
+| Script             | Purpose                                          | Required Env Vars                                               |
+| ------------------ | ------------------------------------------------ | --------------------------------------------------------------- |
+| `addCandidate.ts`  | Set/update candidate list                        | `CANDIDATE_NAMES`, `VOTING_ADDR_SEPOLIA`                        |
+| `startElection.ts` | Set voting time window                           | `ELECTION_START_ISO`, `ELECTION_END_ISO`, `VOTING_ADDR_SEPOLIA` |
+| `setRoot.ts`       | Set Merkle root for voter allowlist              | `VOTER_MERKLE_ROOT`, `VOTING_ADDR_SEPOLIA`                      |
+| `setMinter.ts`     | Grant BALToken minting rights to Voting contract | `BAL_TOKEN_ADDR_SEPOLIA`, `VOTING_ADDR_SEPOLIA`                 |
+
+### Verification Scripts
+
+| Script               | Purpose                 | Required Env Vars                      |
+| -------------------- | ----------------------- | -------------------------------------- |
+| `checkCandidates.ts` | View current candidates | `VOTING_ADDR_SEPOLIA`                  |
+| `checkWindow.ts`     | View voting time window | `VOTING_ADDR_SEPOLIA`                  |
+| `checkResults.ts`    | View vote tallies       | `VOTING_ADDR_SEPOLIA`                  |
+| `checkBALBalance.ts` | Check BAL token balance | `BAL_TOKEN_ADDR_SEPOLIA`, `VOTER_ADDR` |
+
+### Voter Scripts
+
+| Script              | Purpose                                | Required Env Vars                                                  |
+| ------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| `generateProofs.ts` | Generate Merkle proofs from voter list | `VOTERS_FILE` or `--voters` flag                                   |
+| `voteFromProof.ts`  | Submit a vote with Merkle proof        | `VOTER_ADDR`, `CANDIDATE_ID`, `PROOFS_PATH`, `VOTING_ADDR_SEPOLIA` |
+
+---
+
+## Adding Voters to Allowlist
+
+### Method 1: Manual List (Recommended for Testing)
+
+Create `data/voters.json`:
+
+```json
+[
+  "0x669b237a521621a7bc242a18b94f695f52340b9a",
+  "0xAnotherAddress",
+  "0xYetAnotherAddress"
+]
+```
+
+Then generate proofs:
 
 ```bash
+npx hardhat run scripts/generateProofs.ts
+```
+
+### Method 2: NFT Holders (Requires Alchemy API Key)
+
+To use NFT holders as the voter allowlist:
+
+```bash
+npx hardhat run scripts/generateProofs.ts --nft-contract 0xYourNFTAddress
+```
+
+This fetches all current owners of the NFT contract and generates proofs for them.
+
+---
+
+## Deployment Checklist
+
+- [ ] Contracts compiled successfully
+- [ ] Deployed to Sepolia (3 contract addresses saved)
+- [ ] Environment variables updated in `.env`
+- [ ] Candidates set via `addCandidate.ts`
+- [ ] Voting window set via `startElection.ts`
+- [ ] Voter list created in `data/voters.json`
+- [ ] Merkle proofs generated
+- [ ] Merkle root set on-chain via `setRoot.ts`
+- [ ] Minter permission granted via `setMinter.ts`
+- [ ] Test vote successful
+- [ ] Results display correctly
+
+---
+
+## Contract Addresses (Example - Update After Deployment)
+
+Network: Sepolia Testnet
+
+| Contract     | Address                                      |
+| ------------ | -------------------------------------------- |
+| Voting       | `0x7178E35Ea61ee99B60bB5D53Ec055Bf0F236175C` |
+| BALToken     | `0x17C73CE888A41e4fdde7263395Fe5E000cdeb0f0` |
+| CandidateNFT | `0xa6dA074720d79814B3C5Dce94AC502DCeb4afb04` |
+
+View on Etherscan:
+- [Voting Contract](https://sepolia.etherscan.io/address/0x7178E35Ea61ee99B60bB5D53Ec055Bf0F236175C)
+- [BALToken](https://sepolia.etherscan.io/address/0x17C73CE888A41e4fdde7263395Fe5E000cdeb0f0)
+
+---
+
+## Troubleshooting
+
+### "AlreadyVoted()" Error
+Each address can only vote once. Use a different wallet address or redeploy the contract for testing.
+
+### "InvalidProof()" Error
+- Ensure your address is in `data/voters.json`
+- Regenerate proofs after modifying the voter list
+- Update the Merkle root on-chain with `setRoot.ts`
+
+### "VotingClosed()" Error
+Check the voting window with `checkWindow.ts`. Ensure current time is between start and end times.
+
+### "Missing env: VOTING_ADDR" Error
+Make sure you're using `VOTING_ADDR_SEPOLIA` for Sepolia network operations.
+
+### Contract Functions Not Found
+After updating contracts, ensure you:
+1. Recompile: `npx hardhat compile`
+2. Redeploy to get a new contract instance (old deployments won't have new functions)
+
+---
+
+## Development Workflow
+
+```bash
+# Clean build artifacts
 npm run clean
+
+# Compile contracts
 npm run compile
+
+# Run tests
 npm run test
-npm run deploy -- --network sepolia
+
+# Deploy to local network
+npx hardhat ignition deploy ignition/modules/VotingModule.ts
+
+# Deploy to Sepolia
+npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
 ```
 
-Or all in one:
 
-```bash
-npm run full && npm run deploy -- --network sepolia
-```
-
----
-
-## Project Structure (suggested)
+## Project Structure
 
 ```
-/contracts
-  Voting.sol
-  BALToken.sol
-  CandidateNFT.sol
-/ignition
-  modules
-    VotingModule.ts
-/scripts
-  admin
-    setRoot.ts
-    openWindow.ts
-    closeWindow.ts
-    seedCandidates.ts
-  read
-    results.ts
-/tests
-  voting.e2e.ts
-  unit/…
-/frontend
-  src
-    contracts/
-      ABIs + addresses JSON
-    pages/
-      Voter.tsx
-      Admin.tsx
-.gitignore
-.env
-hardhat.config.ts
-package.json
-README.md
+├── contracts/
+│   ├── Voting.sol              # Main voting contract
+│   ├── BALToken.sol           # ERC20 reward token
+│   └── CandidateNFT.sol       # NFT for candidates
+├── ignition/
+│   └── modules/
+│       └── VotingModule.ts    # Deployment module
+├── scripts/
+│   ├── addCandidate.ts        # Set candidates
+│   ├── startElection.ts       # Set voting window
+│   ├── setRoot.ts             # Set Merkle root
+│   ├── setMinter.ts           # Grant minting permission
+│   ├── generateProofs.ts      # Generate Merkle proofs
+│   ├── voteFromProof.ts       # Cast a vote
+│   ├── checkCandidates.ts     # View candidates
+│   ├── checkWindow.ts         # View voting window
+│   ├── checkResults.ts        # View vote tallies
+│   ├── checkBALBalance.ts     # Check token balance
+│   ├── utils.ts               # Shared utilities
+│   ├── abi-introspect.ts
+│   ├── check-viem.ts
+│   ├── checkProofs.ts
+│   ├── checkStatus.ts
+│   ├── debugVoting.ts
+│   ├── fetchVotersFromNFT.ts
+│   ├── getResults.ts
+│   ├── mintCandidateNft.ts
+│   ├── print-deployer.js
+│   ├── send-op-tx.ts
+│   └── vote.ts
+├── data/
+│   ├── voters.json            # List of eligible voters
+│   └── proofs/
+│       ├── proofs.json        # Generated Merkle proofs
+│       └── root.txt           # Merkle root hash
+├── test/                       # Contract tests
+├── .env                        # Environment variables (DO NOT COMMIT)
+├── hardhat.config.ts          # Hardhat configuration
+└── README.md                  # This file
 ```
 
----
 
-## Development & Testing Steps
 
-1. **Clean, compile, test locally**
+## Security Notes
 
-   ```bash
-   npm run clean
-   npm run compile
-   npm run test
-   ```
-
-2. **Deploy locally (Ignition / Hardhat script)**
-
-   ```bash
-   npx hardhat ignition deploy ignition/modules/VotingModule.ts
-   ```
-
-3. **Deploy & verify on Sepolia**
-
-   ```bash
-   npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia --verify
-   ```
-
-   Or with generic deploy:
-
-   ```bash
-   npm run deploy -- --network sepolia
-   ```
-
-4. **Frontend integration**
-
-   * Copy ABIs and deployed addresses into `frontend/src/contracts/`
-   * In frontend, use Viem (or other library) to interact with your deployed contracts: view candidates, submit vote with proof, display BAL token balance, admin controls.
-
----
-
-## Enhancements (future ideas)
-
-* Mint “Voted” badge NFT per vote
-* Event indexing / snapshot service for UI
-* Emergency pause / admin shutdown
-* Gas optimizations, profiling & benchmarking
-* Frontend UX improvements, validation, error handling
-
----
-
-## References & Resources
-
-* Hardhat + Viem plugin & usage docs ([Hardhat][1])
-* MerkletreeJS integration with Solidity proof verification
-* OpenZeppelin v5 patterns (ERC721 `_update`, custom errors)
-* Hardhat Ignition for deploy/verify modules
+- Never commit `.env` file (contains private keys)
+- Never share your private key
+- Use testnet for development
+- Audit contracts before mainnet deployment
+- Keep Merkle proofs secure (they prove voting eligibility)
 
 
 
-## Usage — Running the Voting Scripts (Local Network)
+## Next Steps
 
-### 📦 Prerequisites
+1. Build a frontend UI (React + Web3.js or Viem)
+2. Add result visualization
+3. Implement admin dashboard
+4. Add event logging and notifications
+5. Deploy to mainnet (after thorough testing)
 
-* Hardhat v3 with **@nomicfoundation/hardhat-viem** plugin configured
-* Contracts compiled & deployed (addresses available)
-* A `.env` file in your project root with the following:
 
-  ```ini
-  # Core deployed addresses
-  VOTING_ADDR=0xYourVotingContractAddress
-  CANDIDATE_NFT_ADDR=0xYourNFTContractAddress
-  PROOFS_PATH=./data/proofs/proofs.json
 
-  # Optional / scenario data
-  CANDIDATE_NAMES=Alice,Bob,Charlie
-  VOTER_MERKLE_ROOT=0x...
-  ELECTION_START_ISO=2025-10-01T09:00:00+03:00
-  ELECTION_END_ISO=2025-10-01T21:00:00+03:00
-  VOTER_ADDR=0xYourVoterAddress
-  CANDIDATE_ID=0
-  TO_ADDR=0xYourNFTRecipient
-  TOKEN_URI=https://ipfs.io/ipfs/YourTokenMetadata.json
-  ```
+## Resources
 
-### 🛠️ Run in order
+- [Hardhat Documentation](https://hardhat.org/docs)
+- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
+- [Viem Documentation](https://viem.sh)
+- [Merkle Trees Explained](https://en.wikipedia.org/wiki/Merkle_tree)
+- [Sepolia Faucet](https://sepoliafaucet.com)
 
-Run each script sequentially (PowerShell / Windows style shown):
-
-```powershell
-# 1. Show existing candidates (should be empty initially)
-npx hardhat run --network localhost "scripts/checkCandidates.ts"
-
-# 2. Set candidate list
-npx hardhat run --network localhost "scripts/addCandidate.ts"
-npx hardhat run --network localhost "scripts/checkCandidates.ts"
-
-# 3. Configure Merkle root for whitelist
-npx hardhat run --network localhost "scripts/setRoot.ts"
-
-# 4. Open election window
-npx hardhat run --network localhost "scripts/startElection.ts"
-
-# 5. Cast vote using proof
-npx hardhat run --network localhost "scripts/voteFromProof.ts"
-
-# 6. Get results
-npx hardtask run --network localhost "scripts/getResults.ts"
-
-# 7. (Optional) Mint a candidate NFT
-npx hardhat run --network localhost "scripts/mintCandidateNft.ts"
-```
-
-### ✅ Expected output summary
-
-| Step | Description     | Expected Output                                                |
-| ---- | --------------- | -------------------------------------------------------------- |
-| 1    | View candidates | `Candidates: []` (empty)                                       |
-| 2    | Set candidates  | A TX hash + success message                                    |
-| →    | Re-check        | `Candidates: ["Alice","Bob","Charlie"]`                        |
-| 3    | Set Merkle root | TX hash + confirmation                                         |
-| 4    | Set window      | TX hash + confirmation of start/end                            |
-| 5    | Vote            | TX hash + “Vote cast” confirmation                             |
-| 6    | Get results     | Table of candidate names (and votes, if structure supports it) |
-| 7    | Mint NFT        | TX hash + “Minted to …” message                                |
-
-⚠️ If any script fails due to a missing env (e.g. `Missing env: VOTING_ADDR`), ensure your `.env` file is loaded and includes that key.

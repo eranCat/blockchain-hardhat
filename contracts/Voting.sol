@@ -43,6 +43,7 @@ contract Voting is Ownable, ReentrancyGuard {
     bytes32 public voterRoot;
     string[] internal _candidates;
     mapping(address => bool) public hasVoted;
+    mapping(uint256 => uint256) public voteCounts;  // NEW: Track votes per candidate
 
     IBALToken public immutable balToken;
     uint256 public immutable rewardAmount;
@@ -97,6 +98,7 @@ contract Voting is Ownable, ReentrancyGuard {
         if (!MerkleProof.verify(proof, voterRoot, leaf)) revert InvalidProof();
 
         hasVoted[msg.sender] = true;
+        voteCounts[candidateId]++;  // NEW: Increment vote count
 
         if (rewardAmount != 0) {
             balToken.mint(msg.sender, rewardAmount);
@@ -124,5 +126,20 @@ contract Voting is Ownable, ReentrancyGuard {
 
     function getWindow() external view returns (uint64, uint64) {
         return (start, end);
+    }
+
+    // NEW: Get vote count for a candidate
+    function getVotes(uint256 candidateId) external view returns (uint256) {
+        if (candidateId >= _candidates.length) revert InvalidCandidate(candidateId);
+        return voteCounts[candidateId];
+    }
+
+    // NEW: Get results for all candidates
+    function getResults() external view returns (string[] memory candidates, uint256[] memory votes) {
+        candidates = _candidates;
+        votes = new uint256[](_candidates.length);
+        for (uint256 i = 0; i < _candidates.length; i++) {
+            votes[i] = voteCounts[i];
+        }
     }
 }
