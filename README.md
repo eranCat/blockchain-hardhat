@@ -28,9 +28,9 @@ A blockchain-based voting system with Merkle proof allowlist, ERC20 token reward
 git clone <your-repo-url>
 cd <project-directory>
 npm install
-```
+````
 
----
+-----
 
 ## Environment Setup
 
@@ -38,7 +38,7 @@ Create a `.env` file in the project root (never commit this file):
 
 ```ini
 # Network Configuration
-SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+SEPOLIA_RPC_URL=[https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY](https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY)
 SEPOLIA_PRIVATE_KEY=your_private_key_here
 
 # Contract Addresses (populated after deployment)
@@ -68,7 +68,7 @@ ALCHEMY_API_KEY=your_alchemy_api_key
 ### Environment Variables Reference
 
 | Variable                 | Purpose                         | Example                                    | Required For              |
-| ------------------------ | ------------------------------- | ------------------------------------------ | ------------------------- |
+| :----------------------- | :------------------------------ | :----------------------------------------- | :------------------------ |
 | `SEPOLIA_RPC_URL`        | Sepolia network endpoint        | `https://eth-sepolia.g.alchemy.com/v2/...` | All network operations    |
 | `SEPOLIA_PRIVATE_KEY`    | Deployer/admin wallet key       | `0xabc123...`                              | Deployment, admin scripts |
 | `VOTING_ADDR_SEPOLIA`    | Deployed Voting contract        | `0x7178E35E...`                            | All voting operations     |
@@ -82,28 +82,29 @@ ALCHEMY_API_KEY=your_alchemy_api_key
 | `CANDIDATE_ID`           | Candidate to vote for (0-based) | `0` (Alice), `1` (Bob), `2` (Charlie)      | `voteFromProof.ts`        |
 | `PROOFS_PATH`            | Path to generated proofs        | `./data/proofs/proofs.json`                | `voteFromProof.ts`        |
 
----
+-----
 
 ## Quick Start Guide
 
-### 1. Compile Contracts
+### 1\. Compile Contracts
 
 ```bash
 npx hardhat compile
 ```
 
-### 2. Deploy to Sepolia
+### 2\. Deploy to Sepolia
 
 ```bash
 npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
 ```
 
 Save the three contract addresses that are output:
-- `BALToken`: Update `BAL_TOKEN_ADDR_SEPOLIA` in `.env`
-- `CandidateNFT`: Update `CANDIDATE_NFT_ADDR` in `.env`
-- `Voting`: Update `VOTING_ADDR_SEPOLIA` in `.env`
 
-### 3. Initialize the Election
+  - `BALToken`: Update `BAL_TOKEN_ADDR_SEPOLIA` in `.env`
+  - `CandidateNFT`: Update `CANDIDATE_NFT_ADDR` in `.env`
+  - `Voting`: Update `VOTING_ADDR_SEPOLIA` in `.env`
+
+### 3\. Initialize the Election
 
 Run these scripts in order:
 
@@ -127,7 +128,7 @@ npx hardhat run --network sepolia scripts/setRoot.ts
 npx hardhat run --network sepolia scripts/setMinter.ts
 ```
 
-### 4. Verify Setup
+### 4\. Verify Setup
 
 ```bash
 # Check candidates
@@ -140,7 +141,7 @@ npx hardhat run --network sepolia scripts/checkWindow.ts
 npx hardhat run --network sepolia scripts/checkResults.ts
 ```
 
-### 5. Cast a Test Vote
+### 5\. Cast a Test Vote
 
 Make sure your `VOTER_ADDR` is in the `data/voters.json` file used to generate proofs.
 
@@ -149,7 +150,7 @@ Make sure your `VOTER_ADDR` is in the `data/voters.json` file used to generate p
 npx hardhat run --network sepolia scripts/voteFromProof.ts
 ```
 
-### 6. Check Results
+### 6\. Check Results
 
 ```bash
 # View vote tallies
@@ -159,14 +160,56 @@ npx hardhat run --network sepolia scripts/checkResults.ts
 npx hardhat run --network sepolia scripts/checkBALBalance.ts
 ```
 
----
+-----
+
+## Frontend Setup & Usage (React DApp)
+
+The client-side interface is located in the **`frontend/`** directory.
+
+### 1\. Installation
+
+Navigate into the frontend directory and install dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+### 2\. Environment Setup (`.env.local` file)
+
+The frontend uses environment variables prefixed with `VITE_`. These must be set in a file named **`.env.local`** inside the `frontend/` directory, using the addresses deployed in Step 2 of the Quick Start Guide.
+
+```ini
+# frontend/.env.local (DO NOT COMMIT)
+
+# RPC and Network
+VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+
+# Contract Addresses (Copied from the backend's .env file)
+VITE_VOTING_CONTRACT_ADDRESS=0x...
+VITE_BAL_TOKEN_CONTRACT_ADDRESS=0x...
+VITE_CANDIDATE_NFT_CONTRACT_ADDRESS=0x...
+```
+
+### 3\. Running the DApp
+
+Run the development server:
+
+```bash
+# Ensure you are still in the 'frontend/' directory
+npm run dev
+```
+
+The application will start, typically on `http://localhost:5173/`, displaying the election status and allowing voters to connect their wallets and cast votes.
+
+-----
 
 ## Script Reference
 
 ### Admin Scripts
 
 | Script             | Purpose                                          | Required Env Vars                                               |
-| ------------------ | ------------------------------------------------ | --------------------------------------------------------------- |
+| :----------------- | :----------------------------------------------- | :-------------------------------------------------------------- |
 | `addCandidate.ts`  | Set/update candidate list                        | `CANDIDATE_NAMES`, `VOTING_ADDR_SEPOLIA`                        |
 | `startElection.ts` | Set voting time window                           | `ELECTION_START_ISO`, `ELECTION_END_ISO`, `VOTING_ADDR_SEPOLIA` |
 | `setRoot.ts`       | Set Merkle root for voter allowlist              | `VOTER_MERKLE_ROOT`, `VOTING_ADDR_SEPOLIA`                      |
@@ -175,7 +218,7 @@ npx hardhat run --network sepolia scripts/checkBALBalance.ts
 ### Verification Scripts
 
 | Script               | Purpose                 | Required Env Vars                      |
-| -------------------- | ----------------------- | -------------------------------------- |
+| :------------------- | :---------------------- | :------------------------------------- |
 | `checkCandidates.ts` | View current candidates | `VOTING_ADDR_SEPOLIA`                  |
 | `checkWindow.ts`     | View voting time window | `VOTING_ADDR_SEPOLIA`                  |
 | `checkResults.ts`    | View vote tallies       | `VOTING_ADDR_SEPOLIA`                  |
@@ -184,11 +227,11 @@ npx hardhat run --network sepolia scripts/checkBALBalance.ts
 ### Voter Scripts
 
 | Script              | Purpose                                | Required Env Vars                                                  |
-| ------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| :------------------ | :------------------------------------- | :----------------------------------------------------------------- |
 | `generateProofs.ts` | Generate Merkle proofs from voter list | `VOTERS_FILE` or `--voters` flag                                   |
 | `voteFromProof.ts`  | Submit a vote with Merkle proof        | `VOTER_ADDR`, `CANDIDATE_ID`, `PROOFS_PATH`, `VOTING_ADDR_SEPOLIA` |
 
----
+-----
 
 ## Adding Voters to Allowlist
 
@@ -220,62 +263,51 @@ npx hardhat run scripts/generateProofs.ts --nft-contract 0xYourNFTAddress
 
 This fetches all current owners of the NFT contract and generates proofs for them.
 
----
+-----
 
 ## Deployment Checklist
 
-- [ ] Contracts compiled successfully
-- [ ] Deployed to Sepolia (3 contract addresses saved)
-- [ ] Environment variables updated in `.env`
-- [ ] Candidates set via `addCandidate.ts`
-- [ ] Voting window set via `startElection.ts`
-- [ ] Voter list created in `data/voters.json`
-- [ ] Merkle proofs generated
-- [ ] Merkle root set on-chain via `setRoot.ts`
-- [ ] Minter permission granted via `setMinter.ts`
-- [ ] Test vote successful
-- [ ] Results display correctly
+  - [ ] Contracts compiled successfully
+  - [ ] Deployed to Sepolia (3 contract addresses saved)
+  - [ ] Environment variables updated in `.env`
+  - [ ] Candidates set via `addCandidate.ts`
+  - [ ] Voting window set via `startElection.ts`
+  - [ ] Voter list created in `data/voters.json`
+  - [ ] Merkle proofs generated
+  - [ ] Merkle root set on-chain via `setRoot.ts`
+  - [ ] Minter permission granted via `setMinter.ts`
+  - [ ] Test vote successful
+  - [ ] Results display correctly
 
----
-
-## Contract Addresses (Example - Update After Deployment)
-
-Network: Sepolia Testnet
-
-| Contract     | Address                                      |
-| ------------ | -------------------------------------------- |
-| Voting       | `0x7178E35Ea61ee99B60bB5D53Ec055Bf0F236175C` |
-| BALToken     | `0x17C73CE888A41e4fdde7263395Fe5E000cdeb0f0` |
-| CandidateNFT | `0xa6dA074720d79814B3C5Dce94AC502DCeb4afb04` |
-
-View on Etherscan:
-- [Voting Contract](https://sepolia.etherscan.io/address/0x7178E35Ea61ee99B60bB5D53Ec055Bf0F236175C)
-- [BALToken](https://sepolia.etherscan.io/address/0x17C73CE888A41e4fdde7263395Fe5E000cdeb0f0)
-
----
-
+-----
 ## Troubleshooting
 
 ### "AlreadyVoted()" Error
+
 Each address can only vote once. Use a different wallet address or redeploy the contract for testing.
 
 ### "InvalidProof()" Error
-- Ensure your address is in `data/voters.json`
-- Regenerate proofs after modifying the voter list
-- Update the Merkle root on-chain with `setRoot.ts`
+
+  - Ensure your address is in `data/voters.json`
+  - Regenerate proofs after modifying the voter list
+  - Update the Merkle root on-chain with `setRoot.ts`
 
 ### "VotingClosed()" Error
+
 Check the voting window with `checkWindow.ts`. Ensure current time is between start and end times.
 
-### "Missing env: VOTING_ADDR" Error
+### "Missing env: VOTING\_ADDR" Error
+
 Make sure you're using `VOTING_ADDR_SEPOLIA` for Sepolia network operations.
 
 ### Contract Functions Not Found
-After updating contracts, ensure you:
-1. Recompile: `npx hardhat compile`
-2. Redeploy to get a new contract instance (old deployments won't have new functions)
 
----
+After updating contracts, ensure you:
+
+1.  Recompile: `npx hardhat compile`
+2.  Redeploy to get a new contract instance (old deployments won't have new functions)
+
+-----
 
 ## Development Workflow
 
@@ -295,7 +327,6 @@ npx hardhat ignition deploy ignition/modules/VotingModule.ts
 # Deploy to Sepolia
 npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
 ```
-
 
 ## Project Structure
 
@@ -341,33 +372,26 @@ npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
 └── README.md                  # This file
 ```
 
-
-
 ## Security Notes
 
-- Never commit `.env` file (contains private keys)
-- Never share your private key
-- Use testnet for development
-- Audit contracts before mainnet deployment
-- Keep Merkle proofs secure (they prove voting eligibility)
-
-
+  - Never commit `.env` file (contains private keys)
+  - Never share your private key
+  - Use testnet for development
+  - Audit contracts before mainnet deployment
+  - Keep Merkle proofs secure (they prove voting eligibility)
 
 ## Next Steps
 
-1. Build a frontend UI (React + Web3.js or Viem)
-2. Add result visualization
-3. Implement admin dashboard
-4. Add event logging and notifications
-5. Deploy to mainnet (after thorough testing)
-
-
+1.  Build a frontend UI (React + Web3.js or Viem)
+2.  Add result visualization
+3.  Implement admin dashboard
+4.  Add event logging and notifications
+5.  Deploy to mainnet (after thorough testing)
 
 ## Resources
 
-- [Hardhat Documentation](https://hardhat.org/docs)
-- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
-- [Viem Documentation](https://viem.sh)
-- [Merkle Trees Explained](https://en.wikipedia.org/wiki/Merkle_tree)
-- [Sepolia Faucet](https://sepoliafaucet.com)
-
+  - [Hardhat Documentation](https://hardhat.org/docs)
+  - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
+  - [Viem Documentation](https://viem.sh)
+  - [Merkle Trees Explained](https://en.wikipedia.org/wiki/Merkle_tree)
+  - [Sepolia Faucet](https://sepoliafaucet.com)
