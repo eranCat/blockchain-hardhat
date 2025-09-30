@@ -1,9 +1,9 @@
 import { ConnectWallet } from './components/ConnectWallet';
 import { ElectionStatus } from './components/ElectionStatus';
-import { CandidateList } from './components/CandidateList';
 import { BALBalance } from './components/BALBalance';
 import { ElectionResults } from './components/ElectionResults';
 import { AdminPanel } from './components/AdminPanel';
+import { VotingPanel } from './components/VotingPanel';
 import { useState, useEffect } from 'react';
 
 function App() {
@@ -73,9 +73,9 @@ function App() {
             <BALBalance />
           </div>
 
-          {/* Middle column - Candidates */}
+          {/* Middle column - Voting Panel */}
           <div>
-            <CandidateList />
+            <VotingPanel />
           </div>
 
           {/* Right column - Results */}
