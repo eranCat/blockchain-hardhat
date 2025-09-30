@@ -3,7 +3,7 @@ import { ElectionStatus } from './components/ElectionStatus';
 import { CandidateList } from './components/CandidateList';
 import { BALBalance } from './components/BALBalance';
 import { ElectionResults } from './components/ElectionResults';
-import { AdminPanel } from './components/AdminPanel'; // NEW
+import { AdminPanel } from './components/AdminPanel';
 import { useState, useEffect } from 'react';
 
 function App() {
@@ -54,32 +54,32 @@ function App() {
       <main style={{
         maxWidth: '1280px',
         margin: '0 auto',
-        padding: isMobile ? '1.5rem 1rem' : '3rem 2rem',
+        padding: isMobile ? '1.5rem 1rem' : '2rem',
         flexGrow: 1
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(12, 1fr)',
-          gap: isMobile ? '1rem' : '1.5rem'
+          gridTemplateColumns: isMobile ? '1fr' : '300px 300px 1fr',
+          gap: isMobile ? '1rem' : '1.25rem'
         }}>
+          {/* Left column - Status & BAL */}
           <div style={{
-            gridColumn: isMobile ? '1' : 'span 4',
             display: 'flex',
             flexDirection: 'column',
-            gap: '1.5rem'
+            gap: '1rem'
           }}>
-            <AdminPanel /> {/* NEW - Shows only to admin */}
+            <AdminPanel />
             <ElectionStatus />
             <BALBalance />
           </div>
 
-          <div style={{
-            gridColumn: isMobile ? '1' : 'span 8',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.5rem'
-          }}>
+          {/* Middle column - Candidates */}
+          <div>
             <CandidateList />
+          </div>
+
+          {/* Right column - Results */}
+          <div>
             <ElectionResults />
           </div>
         </div>
