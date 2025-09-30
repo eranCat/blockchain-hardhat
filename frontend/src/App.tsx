@@ -2,6 +2,7 @@ import { ConnectWallet } from './components/ConnectWallet';
 import { ElectionStatus } from './components/ElectionStatus';
 import { CandidateList } from './components/CandidateList';
 import { BALBalance } from './components/BALBalance';
+import { ElectionResults } from './components/ElectionResults'; // NEW IMPORT
 import { useState, useEffect } from 'react';
 
 function App() {
@@ -33,31 +34,18 @@ function App() {
           margin: '0 auto',
           padding: isMobile ? '1rem' : '1.5rem 2rem',
           display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: isMobile ? 'stretch' : 'center',
-          gap: isMobile ? '1rem' : '0'
+          alignItems: 'center'
         }}>
-          <div>
-            <h1 style={{
-              margin: 0,
-              fontSize: isMobile ? '1.5rem' : '2rem',
-              fontWeight: 'bold',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              🗳️ Voting DApp
-            </h1>
-            <p style={{
-              margin: '0.25rem 0 0 0',
-              color: '#718096',
-              fontSize: isMobile ? '0.75rem' : '0.875rem'
-            }}>
-              2025 Elections • Secure Blockchain Voting
-            </p>
-          </div>
+          <h1 style={{
+            fontSize: isMobile ? '1.25rem' : '1.5rem',
+            fontWeight: '700',
+            background: 'linear-gradient(45deg, #4a5568 0%, #2d3748 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            🗳️ Voting DApp
+          </h1>
           <ConnectWallet />
         </div>
       </header>
@@ -65,7 +53,8 @@ function App() {
       <main style={{
         maxWidth: '1280px',
         margin: '0 auto',
-        padding: isMobile ? '1rem' : '2rem'
+        padding: isMobile ? '1.5rem 1rem' : '3rem 2rem',
+        flexGrow: 1
       }}>
         <div style={{
           display: 'grid',
@@ -76,16 +65,20 @@ function App() {
             gridColumn: isMobile ? '1' : 'span 4',
             display: 'flex',
             flexDirection: 'column',
-            gap: '1rem'
+            gap: '1.5rem' // Increased gap here for better spacing
           }}>
             <ElectionStatus />
             <BALBalance />
           </div>
 
           <div style={{
-            gridColumn: isMobile ? '1' : 'span 8'
+            gridColumn: isMobile ? '1' : 'span 8',
+            display: 'flex', // NEW: Added display: flex and flexDirection: column
+            flexDirection: 'column',
+            gap: '1.5rem' // NEW: Added gap to separate components
           }}>
             <CandidateList />
+            <ElectionResults /> {/* NEW COMPONENT */}
           </div>
         </div>
       </main>
@@ -112,11 +105,9 @@ function App() {
           </p>
           <p style={{
             fontSize: isMobile ? '0.625rem' : '0.75rem',
-            fontFamily: 'monospace',
-            color: '#a0aec0',
-            wordBreak: 'break-all'
+            color: '#718096'
           }}>
-            Contract: {import.meta.env.VITE_VOTING_CONTRACT_ADDRESS || '0x...'}
+            A decentralized application built for the 2025 elections.
           </p>
         </div>
       </footer>
