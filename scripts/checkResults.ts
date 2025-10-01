@@ -14,11 +14,14 @@ async function main() {
         fs.readFileSync("./artifacts/contracts/Voting.sol/Voting.json", "utf8")
     ).abi;
 
-    const [names, votes] = await publicClient.readContract({
+    const result = await publicClient.readContract({
         address: votingAddress,
         abi: votingAbi,
-        functionName: "getResults"
-    }) as [string[], bigint[]];
+        functionName: "getResults",
+        args: []
+    });
+
+    const [names, votes] = result as [string[], bigint[]];
 
     console.log("\n=== Election Results ===\n");
     names.forEach((name, i) => {

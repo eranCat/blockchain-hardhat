@@ -29,11 +29,14 @@ async function main() {
     const proof = proofsData[account.address.toLowerCase()];
     if (!proof) throw new Error("No proof found");
 
-    const [names, positions] = await publicClient.readContract({
+    const result = await publicClient.readContract({
         address: votingAddress,
         abi: votingAbi,
-        functionName: "getCandidateDetails"
+        functionName: "getCandidateDetails",
+        args: []
     });
+
+    const [names, positions] = result as [string[], number[][]];
 
     console.log("\nCandidates:");
     names.forEach((n: string, i: number) => {
@@ -50,11 +53,7 @@ async function main() {
         args: [voterPositions, proof]
     });
 
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log(`\n✅ Vote cast: ${hash}`);
-
-    // Find which candidate matched
-    const logs = await publicClient.getTransactionReceipt({ hash });
     console.log("Check results with: npx hardhat run scripts/checkResults.ts --network sepolia");
 }
 
