@@ -27,18 +27,9 @@ export function VotingPanel() {
     }, []);
 
     // Get candidate names for display
-    const { data: candidatesData, error: candidatesError, refetch: refetchCandidates } = useReadContract({
+    const { data: candidatesData, refetch: refetchCandidates } = useReadContract({
         ...votingContract,
         functionName: "getCandidates",
-        query: {
-            enabled: true,
-        }
-    });
-
-    // Get full candidate details for questionnaire matching
-    const { data: candidateDetails } = useReadContract({
-        ...votingContract,
-        functionName: "getAllCandidates",
         query: {
             enabled: true,
         }
@@ -135,9 +126,7 @@ export function VotingPanel() {
     }
 
     // Parse candidate data - remove duplicates
-    const candidates = candidatesData ? Array.from(new Set(candidatesData as any[])) : [];
-
-    console.log("Candidate details:", candidateDetails);
+    const candidates = candidatesData ? Array.from(new Set(candidatesData as [])) : [];
 
     return (
         <div style={{
@@ -238,7 +227,7 @@ export function VotingPanel() {
                                 </div>
                             ) : (
                                 <div style={{ marginBottom: "1.5rem", display: "grid", gap: "0.75rem" }}>
-                                    {candidates.map((candidate: any, index: number) => (
+                                    {candidates.map((candidate: string, index: number) => (
                                         <button
                                             key={index}
                                             onClick={() => setSelectedCandidate(index)}

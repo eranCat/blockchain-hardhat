@@ -24,9 +24,11 @@ export function BALBalance() {
 
     const formattedBalance = balance ? (Number(balance) / 10 ** 18).toFixed(2) : '0.00';
 
+    const symbolStr = symbol ? String(symbol) : 'BAL';
+
     return (
         <span>
-            💰 {formattedBalance} {symbol || 'BAL'} Ballance
+            💰 {formattedBalance} {symbolStr} Ballance
         </span>
     );
 }
