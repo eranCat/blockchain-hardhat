@@ -4,6 +4,7 @@ import { BALBalance } from './components/BALBalance';
 import { ElectionResults } from './components/ElectionResults';
 import { AdminPanel } from './components/AdminPanel';
 import { VotingPanel } from './components/VotingPanel';
+import { QuestionnairePanel } from './components/QuestionnairePanel';
 import { useState, useEffect } from 'react';
 
 function App() {
@@ -73,9 +74,14 @@ function App() {
             <BALBalance />
           </div>
 
-          {/* Middle column - Voting Panel */}
-          <div>
+          {/* Middle column - Voting Panel & Questionnaire */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
             <VotingPanel />
+            <QuestionnairePanel />
           </div>
 
           {/* Right column - Results */}

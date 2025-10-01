@@ -26,10 +26,19 @@ export function VotingPanel() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    // Try getCandidates first (frontend-optimized function from docs)
+    // Get candidate names for display
     const { data: candidatesData, error: candidatesError, refetch: refetchCandidates } = useReadContract({
         ...votingContract,
         functionName: "getCandidates",
+        query: {
+            enabled: true,
+        }
+    });
+
+    // Get full candidate details for questionnaire matching
+    const { data: candidateDetails } = useReadContract({
+        ...votingContract,
+        functionName: "getAllCandidates",
         query: {
             enabled: true,
         }
@@ -127,6 +136,8 @@ export function VotingPanel() {
 
     // Parse candidate data - remove duplicates
     const candidates = candidatesData ? Array.from(new Set(candidatesData as any[])) : [];
+
+    console.log("Candidate details:", candidateDetails);
 
     return (
         <div style={{
