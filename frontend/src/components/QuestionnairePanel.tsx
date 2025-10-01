@@ -75,8 +75,8 @@ export function QuestionnairePanel() {
         }}>
             <h2 style={{
                 marginTop: 0,
-                marginBottom: "1.5rem",
-                fontSize: isMobile ? "1.25rem" : "1.5rem",
+                marginBottom: "1rem",
+                fontSize: isMobile ? "1.1rem" : "1.25rem",
                 fontWeight: "bold",
                 background: "linear-gradient(135deg, #764ba2 0%, #667eea 100%)",
                 WebkitBackgroundClip: "text",
@@ -85,14 +85,14 @@ export function QuestionnairePanel() {
                 Find Your Match
             </h2>
 
-            <div style={{ background: "#fff3cd", padding: "12px", borderRadius: "8px", marginBottom: "20px", fontSize: "0.875rem" }}>
-                Answer these questions to see which candidate best matches your views
+            <div style={{ background: "#fff3cd", padding: "10px", borderRadius: "8px", marginBottom: "15px", fontSize: "0.8rem" }}>
+                See which candidate matches your views
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "8px", fontSize: "0.9rem" }}>
+            <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px", fontSize: "0.85rem" }}>
                     Economic Policy
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#666", marginTop: "4px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
                         <span>Free Market</span>
                         <span>Gov Control</span>
                     </div>
@@ -105,13 +105,13 @@ export function QuestionnairePanel() {
                     onChange={(e) => setEconomicPos(Number(e.target.value))}
                     style={{ width: "100%" }}
                 />
-                <div style={{ textAlign: "center", fontSize: "1.2rem", fontWeight: "700", color: "#764ba2" }}>{economicPos}</div>
+                <div style={{ textAlign: "center", fontSize: "1rem", fontWeight: "700", color: "#764ba2" }}>{economicPos}</div>
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "8px", fontSize: "0.9rem" }}>
+            <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px", fontSize: "0.85rem" }}>
                     Social Policy
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#666", marginTop: "4px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
                         <span>Traditional</span>
                         <span>Progressive</span>
                     </div>
@@ -124,13 +124,13 @@ export function QuestionnairePanel() {
                     onChange={(e) => setSocialPos(Number(e.target.value))}
                     style={{ width: "100%" }}
                 />
-                <div style={{ textAlign: "center", fontSize: "1.2rem", fontWeight: "700", color: "#764ba2" }}>{socialPos}</div>
+                <div style={{ textAlign: "center", fontSize: "1rem", fontWeight: "700", color: "#764ba2" }}>{socialPos}</div>
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "8px", fontSize: "0.9rem" }}>
+            <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px", fontSize: "0.85rem" }}>
                     Foreign Policy
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#666", marginTop: "4px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
                         <span>Isolationist</span>
                         <span>Interventionist</span>
                     </div>
@@ -143,22 +143,22 @@ export function QuestionnairePanel() {
                     onChange={(e) => setForeignPos(Number(e.target.value))}
                     style={{ width: "100%" }}
                 />
-                <div style={{ textAlign: "center", fontSize: "1.2rem", fontWeight: "700", color: "#764ba2" }}>{foreignPos}</div>
+                <div style={{ textAlign: "center", fontSize: "1rem", fontWeight: "700", color: "#764ba2" }}>{foreignPos}</div>
             </div>
 
             <button
                 onClick={calculateMatch}
                 style={{
                     width: "100%",
-                    padding: isMobile ? "0.75rem" : "1rem",
+                    padding: isMobile ? "0.65rem" : "0.75rem",
                     background: "linear-gradient(135deg, #764ba2 0%, #667eea 100%)",
                     color: "white",
                     border: "none",
                     borderRadius: "12px",
                     fontWeight: "700",
-                    fontSize: isMobile ? "1rem" : "1.125rem",
+                    fontSize: isMobile ? "0.9rem" : "1rem",
                     cursor: "pointer",
-                    marginBottom: "1rem"
+                    marginBottom: "0.75rem"
                 }}
             >
                 Calculate Match
@@ -167,17 +167,17 @@ export function QuestionnairePanel() {
             {matchedCandidate && (
                 <div style={{
                     background: "linear-gradient(135deg, #e7f3ff 0%, #f0e7ff 100%)",
-                    padding: "16px",
+                    padding: "12px",
                     borderRadius: "12px",
-                    fontSize: "0.875rem",
+                    fontSize: "0.8rem",
                     border: "2px solid #764ba2"
                 }}>
-                    <strong style={{ fontSize: "1rem" }}>Your best match:</strong>
-                    <div style={{ marginTop: "8px", fontSize: "1.5rem", fontWeight: "700", color: "#764ba2" }}>
+                    <strong style={{ fontSize: "0.9rem" }}>Your best match:</strong>
+                    <div style={{ marginTop: "6px", fontSize: "1.25rem", fontWeight: "700", color: "#764ba2" }}>
                         {matchedCandidate}
                     </div>
-                    <div style={{ marginTop: "8px", fontSize: "0.8rem", color: "#666" }}>
-                        Based on positions: [{economicPos}, {socialPos}, {foreignPos}]
+                    <div style={{ marginTop: "6px", fontSize: "0.75rem", color: "#666" }}>
+                        Positions: [{economicPos}, {socialPos}, {foreignPos}]
                     </div>
                 </div>
             )}

@@ -48,44 +48,62 @@ function App() {
           }}>
             🗳️ Voting DApp
           </h1>
-          <ConnectWallet />
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div style={{
+              fontSize: '1.75rem',
+              color: '#718096',
+              background: 'rgba(0,0,0,0.03)',
+              padding: '0.35rem 0.75rem',
+              borderRadius: '8px',
+              fontWeight: '500'
+            }}>
+              <BALBalance />
+            </div>
+            <ConnectWallet />
+            <div style={{ position: 'relative', zIndex: 200 }}>
+              <AdminPanel />
+            </div>
+          </div>
         </div>
       </header>
 
       <main style={{
-        maxWidth: '1280px',
+        maxWidth: '1400px',
         margin: '0 auto',
         padding: isMobile ? '1.5rem 1rem' : '2rem',
         flexGrow: 1
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '300px 300px 1fr',
-          gap: isMobile ? '1rem' : '1.25rem'
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+          gap: isMobile ? '1rem' : '1.5rem',
+          alignItems: 'start'
         }}>
-          {/* Left column - Status & BAL */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}>
-            <AdminPanel />
-            <ElectionStatus />
-            <BALBalance />
-          </div>
-
-          {/* Middle column - Voting Panel & Questionnaire */}
+          {/* Column 1 */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
             gap: '1rem'
           }}>
             <VotingPanel />
+            <ElectionStatus />
+          </div>
+
+          {/* Column 2 */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
             <QuestionnairePanel />
           </div>
 
-          {/* Right column - Results */}
-          <div>
+          {/* Column 3 */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
             <ElectionResults />
           </div>
         </div>
