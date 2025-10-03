@@ -5,56 +5,105 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC2981} from "@openzeppelin/contracts/token/common/ERC2981.sol";
 
+// -----------------------------------------------------------------------------
+// Custom Errors
+// -----------------------------------------------------------------------------
+error ZeroAddress();
+
 /**
  * @title CandidateNFT
- * @dev ERC721 with simple on-chain tokenURI storage, 10% royalty (ERC-2981),
- *      and basic owner-history. Compatible with OpenZeppelin Contracts v5.x.
+ * @notice ERC721 NFTs representing election candidates
+ * @dev Features:
+ *      - On-chain metadata URIs
+ *      - 10% creator royalty (ERC-2981)
+ *      - Owner transfer history tracking
+ *      - Compatible with OpenZeppelin Contracts v5.x
  */
 contract CandidateNFT is ERC721, ERC2981, Ownable {
-    uint256 private _nextId = 1;
+    // -------------------------------------------------------------------------
+    // Constants
+    // -------------------------------------------------------------------------
+    uint96 private constant ROYALTY_BASIS_POINTS = 1000; // 10%
 
-    // On-chain metadata pointers per token
+    // -------------------------------------------------------------------------
+    // Storage
+    // -------------------------------------------------------------------------
+    uint256 private _nextTokenId = 1;
+
     mapping(uint256 => string) private _tokenURIs;
-
-    // Append-only history of owners per token
     mapping(uint256 => address[]) private _ownerHistory;
 
-    constructor(address initialOwner)
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
+    /// @param _initialOwner Address that will own the contract and receive royalties
+    constructor(address _initialOwner)
         ERC721("CandidateNFT", "CNFT")
-        Ownable(initialOwner)
+        Ownable(_initialOwner)
     {
-        // 10% royalty to the creator/owner (1000 bps)
-        _setDefaultRoyalty(initialOwner, 1000);
+        if (_initialOwner == address(0)) revert ZeroAddress();
+        _setDefaultRoyalty(_initialOwner, ROYALTY_BASIS_POINTS);
     }
 
+    // -------------------------------------------------------------------------
+    // Minting
+    // -------------------------------------------------------------------------
+    
+    /// @notice Mint new candidate NFT
+    /// @dev Only owner (typically Voting contract) can mint
+    /// @param to Recipient address
+    /// @param uri Metadata URI (e.g., ipfs://...)
+    /// @return tokenId The minted token ID
     function mint(address to, string memory uri)
         external
         onlyOwner
         returns (uint256 tokenId)
     {
-        tokenId = _nextId++;
+        if (to == address(0)) revert ZeroAddress();
+        
+        tokenId = _nextTokenId++;
         _safeMint(to, tokenId);
         _tokenURIs[tokenId] = uri;
         _ownerHistory[tokenId].push(to);
     }
 
-    /// Read the stored token URI (OZ recommends overriding tokenURI if you store URIs yourself)
+    // -------------------------------------------------------------------------
+    // Metadata
+    // -------------------------------------------------------------------------
+    
+    /// @notice Get token metadata URI
+    /// @dev Overrides ERC721 to return stored URI
     function tokenURI(uint256 tokenId)
         public
         view
         override
         returns (string memory)
     {
-        _requireOwned(tokenId); // from ERC721 v5
+        _requireOwned(tokenId);
         return _tokenURIs[tokenId];
     }
 
-    /// Optional: read back the owner history
-    function ownerHistory(uint256 tokenId) external view returns (address[] memory) {
+    // -------------------------------------------------------------------------
+    // History Tracking
+    // -------------------------------------------------------------------------
+    
+    /// @notice Get complete ownership history for a token
+    /// @param tokenId Token to query
+    /// @return Array of all historical owners (chronological order)
+    function getOwnerHistory(uint256 tokenId) 
+        external 
+        view 
+        returns (address[] memory) 
+    {
+        _requireOwned(tokenId);
         return _ownerHistory[tokenId];
     }
 
-    /// v5 unified hook for mint/transfer/burn. Handle history + cleanup here.
+    // -------------------------------------------------------------------------
+    // Hooks
+    // -------------------------------------------------------------------------
+    
+    /// @dev Override to track ownership changes and clean up on burn
     function _update(address to, uint256 tokenId, address auth)
         internal
         override
@@ -63,22 +112,29 @@ contract CandidateNFT is ERC721, ERC2981, Ownable {
         from = super._update(to, tokenId, auth);
 
         if (to == address(0)) {
-            // BURN: clean per-token storage
+            // Token is being burned - clean up storage
             delete _tokenURIs[tokenId];
             delete _ownerHistory[tokenId];
-        } else {
-            // MINT or TRANSFER: append recipient to history
+        } else if (from != address(0)) {
+            // Token is being transferred (not minted)
             _ownerHistory[tokenId].push(to);
         }
+        // If from == address(0), it's a mint - already handled in mint()
+        
+        return from;
     }
 
-    /// ERC165 support (ERC721 + ERC2981)
-    function supportsInterface(bytes4 iid)
+    // -------------------------------------------------------------------------
+    // Interface Support
+    // -------------------------------------------------------------------------
+    
+    /// @dev ERC165 support for ERC721 + ERC2981
+    function supportsInterface(bytes4 interfaceId)
         public
         view
         override(ERC721, ERC2981)
         returns (bool)
     {
-        return super.supportsInterface(iid);
+        return super.supportsInterface(interfaceId);
     }
 }
