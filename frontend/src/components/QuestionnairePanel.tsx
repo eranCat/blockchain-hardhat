@@ -13,6 +13,8 @@ export function QuestionnairePanel() {
     const [socialPos, setSocialPos] = useState(5);
     const [foreignPos, setForeignPos] = useState(5);
     const [matchedCandidate, setMatchedCandidate] = useState<string | null>(null);
+    const [matchDistance, setMatchDistance] = useState<number>(0);
+    const [matchPercentage, setMatchPercentage] = useState<number>(0);
 
     useEffect(() => {
         setIsMobile(window.innerWidth < 768);
@@ -58,7 +60,13 @@ export function QuestionnairePanel() {
             }
         }
 
+        // Calculate match percentage (max distance is sqrt(10^2 + 10^2 + 10^2) = 17.32)
+        const maxDistance = Math.sqrt(300); // sqrt(10^2 * 3)
+        const percentage = Math.round((1 - minDistance / maxDistance) * 100);
+
         setMatchedCandidate(bestMatch);
+        setMatchDistance(Math.round(minDistance * 10) / 10); // Round to 1 decimal
+        setMatchPercentage(percentage);
     };
 
     return (
@@ -173,8 +181,11 @@ export function QuestionnairePanel() {
                     <div style={{ marginTop: "6px", fontSize: "1.25rem", fontWeight: "700", color: "#764ba2" }}>
                         {matchedCandidate}
                     </div>
-                    <div style={{ marginTop: "6px", fontSize: "0.75rem", color: "#666" }}>
-                        Positions: [{economicPos}, {socialPos}, {foreignPos}]
+                    <div style={{ marginTop: "6px", fontSize: "0.85rem", color: "#555" }}>
+                        Match: <strong style={{ color: "#764ba2" }}>{matchPercentage}%</strong>
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
+                        Distance: {matchDistance}
                     </div>
                 </div>
             )}
