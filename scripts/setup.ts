@@ -1,72 +1,99 @@
 import hre from "hardhat";
 
 async function main() {
-    // Get voting address - hardhat network (localhost)
-    const votingAddr = (process.env.VOTING_ADDR_LOCAL || process.env.VITE_VOTING_CONTRACT_ADDRESS) as `0x${string}`;
+    // Select address based on network
+    const votingAddr = hre.network.name === "sepolia"
+        ? process.env.VOTING_ADDR_SEPOLIA
+        : process.env.VOTING_ADDR_LOCAL;
 
     if (!votingAddr) {
-        throw new Error("Voting address not found. Set VOTING_ADDR_LOCAL or VITE_VOTING_CONTRACT_ADDRESS in .env");
+        throw new Error(`VOTING_ADDR_${hre.network.name.toUpperCase()} not set in .env`);
     }
 
-    console.log("⚙️  Setting up election on local network...");
+    console.log("⚙️  Setting up election...");
+    console.log(`📍 Network: ${hre.network.name}`);
     console.log(`📍 Voting contract: ${votingAddr}\n`);
 
-    const voting = await hre.viem.getContractAt("Voting", votingAddr);
+    const Voting = await hre.ethers.getContractFactory("Voting");
+    const voting = Voting.attach(votingAddr);
 
     // Add candidates with policy positions
     const candidates = [
-        { name: "Alice", positions: [3, 7, 5] },   // Progressive economics
-        { name: "Bob", positions: [7, 3, 8] },     // Conservative social
-        { name: "Charlie", positions: [5, 5, 3] }, // Moderate isolationist
+        { name: "Alice", positions: [3, 7, 5] as [number, number, number] },
+        { name: "Bob", positions: [7, 3, 8] as [number, number, number] },
+        { name: "Charlie", positions: [5, 5, 3] as [number, number, number] },
     ];
 
     console.log("👥 Adding candidates...");
-    for (const candidate of candidates) {
+
+    // First, use setCandidates to add all candidates with default positions
+    const names = candidates.map(c => c.name);
+    try {
+        const tx = await voting.setCandidates(names);
+        await tx.wait();
+        console.log(`✅ Added ${names.length} candidates: ${names.join(', ')}`);
+    } catch (err: any) {
+        console.log(`⚠️  Error adding candidates: ${err.message.split('\n')[0]}`);
+    }
+
+    // Then update each candidate's positions individually
+    console.log("\n📊 Setting custom positions...");
+    for (let i = 0; i < candidates.length; i++) {
         try {
-            const hash = await voting.write.setCandidate([
-                candidate.name,
-                candidate.positions as [number, number, number]
-            ]);
-            console.log(`✅ ${candidate.name} added (positions: [${candidate.positions.join(', ')}])`);
+            const tx = await voting.setCandidate(candidates[i].name, candidates[i].positions);
+            await tx.wait();
+            console.log(`✅ ${candidates[i].name}: [${candidates[i].positions.join(', ')}]`);
         } catch (err: any) {
-            if (err.message.includes("revert")) {
-                console.log(`⭐ ${candidate.name} (already exists)`);
-            } else {
-                throw err;
-            }
+            console.log(`⚠️  ${candidates[i].name}: ${err.message.split('\n')[0]}`);
         }
     }
 
-    // Set voting window
-    const now = Math.floor(Date.now() / 1000);
-    const start = now + 60;  // Start in 1 minute
-    const end = start + (86400 * 3); // 3 days
+    // Check if voting window needs setup
+    const [start, end] = await voting.getVotingWindow();
+    if (start === 0n) {
+        console.log("\n⏰ Setting voting window...");
+        const now = Math.floor(Date.now() / 1000);
+        const startTime = now;
+        const endTime = now + (30 * 24 * 60 * 60);
 
-    console.log("\n⏰ Setting voting window...");
-    try {
-        await voting.write.setVotingWindow([BigInt(start), BigInt(end)]);
-        console.log(`✅ Voting starts: ${new Date(start * 1000).toISOString()}`);
-        console.log(`   Voting ends:   ${new Date(end * 1000).toISOString()}`);
-    } catch (err: any) {
-        console.log("⚠️  Voting window already set or error:", err.message);
+        const tx = await voting.setVotingWindow(startTime, endTime);
+        await tx.wait();
+        console.log(`✅ Start: ${new Date(startTime * 1000).toLocaleString()}`);
+        console.log(`   End: ${new Date(endTime * 1000).toLocaleString()}`);
+    } else {
+        console.log(`\n⏰ Voting window already set`);
+        console.log(`   Start: ${new Date(Number(start) * 1000).toLocaleString()}`);
+        console.log(`   End: ${new Date(Number(end) * 1000).toLocaleString()}`);
     }
 
-    // Set Merkle root (if available)
+    // Set Merkle root
     const merkleRoot = process.env.VOTER_MERKLE_ROOT;
-    if (merkleRoot) {
-        console.log("\n🌳 Setting voter registry...");
-        try {
-            await voting.write.setVoterRoot([merkleRoot as `0x${string}`]);
+    const currentRoot = await voting.voterRoot();
+
+    if (currentRoot === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        if (merkleRoot && merkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000") {
+            console.log("\n🌳 Setting voter registry...");
+            const tx = await voting.setVoterRoot(merkleRoot);
+            await tx.wait();
             console.log("✅ Merkle root set");
-        } catch (err: any) {
-            console.log("⚠️  Root already set or error:", err.message);
+        } else {
+            console.log("\n⚠️  VOTER_MERKLE_ROOT not set in .env");
+            console.log("   Add: VOTER_MERKLE_ROOT=0x871ff315bb722c78d10f8eb075e6c52e7b99e03dd6c7b27b5b7e9296ad9cff97");
         }
     } else {
-        console.log("\n⚠️  VOTER_MERKLE_ROOT not set - add it to .env!");
-        console.log("   It should be: 0x871ff315bb722c78d10f8eb075e6c52e7b99e03dd6c7b27b5b7e9296ad9cff97");
+        console.log("\n🌳 Merkle root already set:", currentRoot);
     }
+
+    // Show current state
+    const count = await voting.candidateCount();
+    console.log(`\n📊 Total candidates: ${count.toString()}`);
 
     console.log("\n✅ Setup complete!\n");
 }
 
-main().catch(console.error);
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });

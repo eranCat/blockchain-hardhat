@@ -1,7 +1,8 @@
-import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from 'wagmi';
+import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt, useChainId } from 'wagmi';
 import { useState, useEffect } from 'react';
 import { votingABI } from '../contracts';
 import { ProofUpload } from './ProofUpload';
+import { sepolia } from 'wagmi/chains';
 
 const votingContract = {
     address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
@@ -10,6 +11,7 @@ const votingContract = {
 
 export function CandidateList() {
     const { address } = useAccount();
+    const chainId = useChainId();
     const [proofData, setProofData] = useState<`0x${string}`[] | null>(null);
     const [isMobile, setIsMobile] = useState(false);
     const [voteMode, setVoteMode] = useState<'direct' | 'questionnaire'>('direct');
@@ -25,19 +27,37 @@ export function CandidateList() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
+    // Debug: Check contract config
+    useEffect(() => {
+        console.log('Contract Address:', votingContract.address);
+        console.log('Current Chain ID:', chainId);
+        console.log('Expected Chain (Sepolia):', sepolia.id);
+    }, [chainId]);
+
     const { data: candidatesData, error: readError, isLoading: readLoading, refetch } = useReadContract({
         ...votingContract,
         functionName: "getAllCandidates",
+        query: {
+            enabled: chainId === sepolia.id && !!votingContract.address,
+        }
     });
 
     const { data: hasVoted, refetch: refetchVoted } = useReadContract({
         ...votingContract,
         functionName: "hasVoted",
         args: address ? [address] : undefined,
+        query: {
+            enabled: !!address && chainId === sepolia.id,
+        }
     });
 
     const { data: hash, writeContract, isPending } = useWriteContract();
     const { isSuccess } = useWaitForTransactionReceipt({ hash });
+
+    // Debug: Log contract read results
+    useEffect(() => {
+        console.log('Read State:', { readLoading, readError: readError?.message, candidatesData });
+    }, [readLoading, readError, candidatesData]);
 
     useEffect(() => {
         if (isSuccess) {
@@ -74,6 +94,21 @@ export function CandidateList() {
         });
     };
 
+    // Network check
+    if (chainId !== sepolia.id) {
+        return (
+            <div style={{
+                padding: "2rem",
+                textAlign: "center",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px",
+                color: "#e53e3e"
+            }}>
+                ⚠️ Wrong Network: Please switch to Sepolia in MetaMask
+            </div>
+        );
+    }
+
     if (readError) {
         return (
             <div style={{
@@ -83,12 +118,15 @@ export function CandidateList() {
                 borderRadius: "16px",
                 color: "#e53e3e"
             }}>
-                Error: {readError.message}
+                <div>Error: {readError.message}</div>
+                <div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
+                    Contract: {votingContract.address}
+                </div>
             </div>
         );
     }
 
-    if (readLoading || !candidatesData) {
+    if (readLoading) {
         return (
             <div style={{
                 padding: "2rem",
@@ -96,12 +134,41 @@ export function CandidateList() {
                 background: "rgba(255, 255, 255, 0.95)",
                 borderRadius: "16px"
             }}>
-                Loading candidates...
+                <div>Loading candidates...</div>
+                <div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
+                    Contract: {votingContract.address}
+                </div>
             </div>
         );
     }
 
-    const [names, positions, votes] = candidatesData as [string[], number[][], bigint[]];
+    if (!candidatesData) {
+        return (
+            <div style={{
+                padding: "2rem",
+                textAlign: "center",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px"
+            }}>
+                No data returned from contract. Check console for details.
+            </div>
+        );
+    }
+
+    const [names, positions, votes] = candidatesData as [string[], readonly number[][], bigint[]];
+
+    if (names.length === 0) {
+        return (
+            <div style={{
+                padding: "2rem",
+                textAlign: "center",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px"
+            }}>
+                No candidates have been added yet. Admin needs to set candidates first.
+            </div>
+        );
+    }
 
     return (
         <div style={{
