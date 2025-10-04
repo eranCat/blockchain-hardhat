@@ -1,15 +1,28 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
 export default buildModule("VotingModule", (m) => {
-    const balToken = m.contract("BALToken", [1_000_000n * 10n ** 18n]);
-    const candidateNFT = m.contract("CandidateNFT");
-    const voting = m.contract("Voting", [balToken, 10n * 10n ** 18n, candidateNFT]);
+    // BALToken(name, symbol, owner)
+    const balToken = m.contract("BALToken", [
+        "Ballot Token",
+        "BAL",
+        m.getAccount(0)
+    ]);
 
-    const minterRole = m.staticCall(balToken, "MINTER_ROLE");
-    m.call(balToken, "grantRole", [minterRole, voting]);
+    // CandidateNFT(owner)
+    const candidateNFT = m.contract("CandidateNFT", [m.getAccount(0)]);
 
-    const nftMinterRole = m.staticCall(candidateNFT, "MINTER_ROLE");
-    m.call(candidateNFT, "grantRole", [nftMinterRole, voting]);
+    // Voting(balAddress, rewardPerVote, nftAddress)
+    const voting = m.contract("Voting", [
+        balToken,
+        10n * 10n ** 18n, // 10 BAL tokens reward
+        candidateNFT
+    ]);
+
+    // Set voting contract as minter
+    m.call(balToken, "setMinter", [voting]);
+
+    // Transfer NFT ownership to Voting
+    m.call(candidateNFT, "transferOwnership", [voting]);
 
     return { balToken, candidateNFT, voting };
 });

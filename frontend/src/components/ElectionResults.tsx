@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 
 // Use the existing contract configuration
 const votingContract = {
-    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
     abi: votingABI,
 } as const;
 

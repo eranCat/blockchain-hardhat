@@ -1,52 +1,91 @@
-import { network } from "hardhat";
-import type { Address, Hex } from "viem";
+import { createWalletClient, createPublicClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
+import { config } from "dotenv";
 
-
-async function loadProof(): Promise<readonly Hex[]> {
-    // TODO: if you have PROOFS_PATH & VOTER_ADDR, load your proof here and return as Hex[]
-    // Example minimal default (no proof required / allow-list off):
-    return [] as const;
-}
+config(); // Load .env file
 
 async function main() {
-    const { viem } = await network.connect();
+    const candidateId = process.argv[2] ? parseInt(process.argv[2]) : 0;
 
-    const publicClient = await viem.getPublicClient();
-    console.log("Chain ID:", await publicClient.getChainId());
+    // Load private key
+    const privateKey = process.env.SEPOLIA_PRIVATE_KEY;
+    if (!privateKey) throw new Error("SEPOLIA_PRIVATE_KEY not found in .env");
 
-    const [wallet] = await viem.getWalletClients();
-    console.log("Wallet address:", await wallet.getAddresses());
+    const account = privateKeyToAccount(privateKey as `0x${string}`);
+    console.log("Voting from:", account.address);
 
-    // Resolve address per-network (SEPOLIA/LOCALHOST) and export for utils that read process.env
+    // Load proof
+    const proofsPath = process.env.PROOFS_PATH || join(process.cwd(), "proofs.json");
+    const proofsJson = JSON.parse(readFileSync(proofsPath, "utf-8"));
 
+    console.log("Tree root:", proofsJson.tree[0]);
 
-    const voting = await viem.getContractAt(
-        "Voting",
-        process.env.VOTING_ADDR as Address
+    const entry = proofsJson.values.find(
+        (v: any) => v.value[0].toLowerCase() === account.address.toLowerCase()
     );
 
-    // Debug: confirm we are talking to the right contract
-    const owner = await voting.read.owner();
-    console.log("owner:", owner);
+    if (!entry) {
+        throw new Error(`No proof found for address ${account.address}`);
+    }
 
-    // Candidate index (0/1/2 for Alice/Bob/Charlie)
-    const rawIdx = process.env.CANDIDATE_ID ?? "0";
-    const candidateIdx = BigInt(Number(rawIdx));
+    const tree = StandardMerkleTree.load(proofsJson);
+    const proof = tree.getProof(entry.treeIndex) as `0x${string}`[];
 
-    // Merkle proof (bytes32[]) — must be typed as readonly Hex[]
-    const proof = await loadProof(); // returns [] if you don’t need proofs
+    console.log("Proof:", proof);
 
-    // ---- simulate first (recommended by viem) ----
-    console.log(`Simulating vote(${candidateIdx})...`);
-    const sim = await voting.simulate.vote([candidateIdx, proof]);
-    console.log("✅ Simulation OK:", sim.request);
+    // Load contract ABI
+    const artifactPath = join(process.cwd(), "artifacts/contracts/Voting.sol/Voting.json");
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf-8"));
 
-    // ---- send the tx ----
-    const txHash = await voting.write.vote([candidateIdx, proof]);
-    console.log("✅ Vote tx:", txHash);
+    const votingAddress = "0x23770a5CDCefb121c37B83BAAaE96cCa5d475A72";
+
+    const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http(process.env.SEPOLIA_RPC_URL),
+    });
+
+    const walletClient = createWalletClient({
+        account,
+        chain: sepolia,
+        transport: http(process.env.SEPOLIA_RPC_URL),
+    });
+
+    // Check if already voted
+    const hasVoted = await publicClient.readContract({
+        address: votingAddress as `0x${string}`,
+        abi: artifact.abi,
+        functionName: "hasVoted",
+        args: [account.address],
+    });
+
+    if (hasVoted) {
+        console.log("Already voted!");
+        return;
+    }
+
+    // Vote
+    console.log(`Voting for candidate ${candidateId}...`);
+    const hash = await walletClient.writeContract({
+        address: votingAddress as `0x${string}`,
+        abi: artifact.abi,
+        functionName: "vote",
+        args: [BigInt(candidateId), proof],
+    });
+
+    console.log("Transaction hash:", hash);
+    console.log("Waiting for confirmation...");
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    console.log("Vote confirmed! Block:", receipt.blockNumber);
 }
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error("Error:", error.message);
+        process.exit(1);
+    });
