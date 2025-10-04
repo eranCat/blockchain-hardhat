@@ -97,7 +97,8 @@ export function ElectionStatus() {
     return (
         <div style={{
             ...cardStyle,
-            border: `2px solid ${statusColor}`
+            border: `2px solid ${statusColor}`,
+            backgroundColor: statusBg.replace('0.95', '0.3')
         }}>
             <div style={{
                 display: 'flex',

@@ -21,20 +21,23 @@ export function QuestionnairePanel() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    // Get full candidate details with positions
-    const { data: candidateDetails } = useReadContract({
+    const { data: candidatesData } = useReadContract({
         ...votingContract,
-        functionName: "getCandidateDetails",
+        functionName: "getAllCandidates",
     });
 
     const calculateMatch = () => {
-        if (!candidateDetails || !Array.isArray(candidateDetails) || candidateDetails.length < 2) {
-            alert("No candidate position data available.");
+        if (!candidatesData) {
+            alert("No candidate data available.");
             return;
         }
 
-        const names = candidateDetails[0] as string[];
-        const positions = candidateDetails[1] as number[][];
+        const [names, positions, _votes] = candidatesData as [string[], readonly number[][], bigint[]];
+
+        if (names.length === 0) {
+            alert("No candidates available.");
+            return;
+        }
 
         const userPos = [economicPos, socialPos, foreignPos];
         let minDistance = Infinity;
@@ -42,8 +45,6 @@ export function QuestionnairePanel() {
 
         for (let i = 0; i < names.length; i++) {
             const candidatePos = positions[i];
-
-            if (!candidatePos || candidatePos.length !== 3) continue;
 
             const distance = Math.sqrt(
                 Math.pow(userPos[0] - candidatePos[0], 2) +
@@ -57,11 +58,7 @@ export function QuestionnairePanel() {
             }
         }
 
-        if (bestMatch) {
-            setMatchedCandidate(bestMatch);
-        } else {
-            alert("Could not calculate match.");
-        }
+        setMatchedCandidate(bestMatch);
     };
 
     return (
