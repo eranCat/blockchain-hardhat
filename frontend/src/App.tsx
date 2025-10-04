@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { ConnectWallet } from './components/ConnectWallet';
 import { ElectionStatus } from './components/ElectionStatus';
 import { BALBalance } from './components/BALBalance';
@@ -5,7 +6,6 @@ import { ElectionResults } from './components/ElectionResults';
 import { AdminPanel } from './components/AdminPanel';
 import { VotingPanel } from './components/VotingPanel';
 import { QuestionnairePanel } from './components/QuestionnairePanel';
-import { useState, useEffect } from 'react';
 
 function App() {
   const [isMobile, setIsMobile] = useState(false);
@@ -79,31 +79,16 @@ function App() {
           gap: isMobile ? '1rem' : '1.5rem',
           alignItems: 'start'
         }}>
-          {/* Column 1 */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <VotingPanel />
             <ElectionStatus />
           </div>
 
-          {/* Column 2 */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <QuestionnairePanel />
           </div>
 
-          {/* Column 3 */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <ElectionResults />
           </div>
         </div>

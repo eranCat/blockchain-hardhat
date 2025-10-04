@@ -19,7 +19,7 @@ export function AdminPanel() {
 
     // Read existing candidates
     const { data: existingCandidates, refetch } = useReadContract({
-        address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+        address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
         abi: votingABI,
         functionName: 'getCandidates',
     });
@@ -67,7 +67,7 @@ export function AdminPanel() {
         const updatedCandidates = [...currentCandidates, ...newCandidates];
 
         writeContractAsync({
-            address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+            address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
             abi: votingABI,
             functionName: 'setCandidates',
             args: [updatedCandidates],
@@ -85,7 +85,7 @@ export function AdminPanel() {
         try {
             setTxStatus('pending');
             await writeContractAsync({
-                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
                 functionName: 'setMerkleRoot',
                 args: [merkleRoot as `0x${string}`],
@@ -115,9 +115,9 @@ export function AdminPanel() {
         try {
             setTxStatus('pending');
             await writeContractAsync({
-                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setWindow',
+                functionName: 'setVotingWindow',
                 args: [BigInt(start), BigInt(end)],
             });
             setStartTime('');
@@ -223,7 +223,7 @@ export function AdminPanel() {
                             gap: '1.25rem'
                         }}>
                             {/* Transaction Status */}
-                            {txStatus !== 'idle' && (
+                            {isPending || isConfirming && (
                                 <div style={{
                                     padding: '0.75rem',
                                     borderRadius: '8px',
@@ -273,7 +273,7 @@ export function AdminPanel() {
                                 />
                                 <button
                                     onClick={handleAddCandidate}
-                                    disabled={txStatus !== 'idle'}
+                                    disabled={isPending || isConfirming}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
@@ -283,11 +283,11 @@ export function AdminPanel() {
                                         borderRadius: '8px',
                                         fontSize: '0.875rem',
                                         fontWeight: '700',
-                                        cursor: txStatus !== 'idle' ? 'not-allowed' : 'pointer',
-                                        opacity: txStatus !== 'idle' ? 0.6 : 1
+                                        cursor: isPending || isConfirming ? 'not-allowed' : 'pointer',
+                                        opacity: isPending || isConfirming ? 0.6 : 1
                                     }}
                                 >
-                                    {txStatus !== 'idle' ? 'Processing...' : 'Add Candidate'}
+                                    {isPending || isConfirming ? 'Processing...' : 'Add Candidate'}
                                 </button>
                             </div>
 

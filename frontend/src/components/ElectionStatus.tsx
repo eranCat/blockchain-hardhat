@@ -3,7 +3,7 @@ import { votingABI } from '../contracts';
 import { useState, useEffect } from 'react';
 
 const votingContract = {
-    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
     abi: votingABI,
 } as const;
 
@@ -11,7 +11,7 @@ export function ElectionStatus() {
     const [isMobile, setIsMobile] = useState(false);
     const { data: windowData, isLoading, isError, refetch } = useReadContract({
         ...votingContract,
-        functionName: 'getWindow',
+        functionName: 'getVotingWindow',
     });
 
     useEffect(() => {
@@ -21,7 +21,6 @@ export function ElectionStatus() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Auto-refetch every 10 seconds
     useEffect(() => {
         const interval = setInterval(() => {
             refetch();
@@ -58,7 +57,7 @@ export function ElectionStatus() {
                 border: '2px solid #fc8181',
                 color: '#c53030'
             }}>
-                ⚠️ Error loading election status
+                Error loading election status
             </div>
         );
     }
@@ -120,9 +119,9 @@ export function ElectionStatus() {
                     fontWeight: '700',
                     fontSize: isMobile ? '0.875rem' : '1rem'
                 }}>
-                    {status === 'pending' && '⏳ Starting Soon'}
-                    {status === 'active' && '✅ Voting Open'}
-                    {status === 'ended' && '🏁 Election Ended'}
+                    {status === 'pending' && 'Starting Soon'}
+                    {status === 'active' && 'Voting Open'}
+                    {status === 'ended' && 'Election Ended'}
                 </div>
             </div>
 
@@ -148,7 +147,7 @@ export function ElectionStatus() {
                         fontWeight: '600',
                         fontSize: isMobile ? '0.75rem' : '0.875rem'
                     }}>
-                        🗳️ Cast your vote now!
+                        Cast your vote now!
                     </div>
                 )}
             </div>

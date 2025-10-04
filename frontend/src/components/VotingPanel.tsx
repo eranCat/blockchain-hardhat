@@ -1,9 +1,10 @@
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from 'wagmi';
 import { useState, useEffect } from 'react';
 import { votingABI } from '../contracts';
+import { ProofUpload } from './ProofUpload';
 
 const votingContract = {
-    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
     abi: votingABI,
 } as const;
 
@@ -13,8 +14,6 @@ export function VotingPanel() {
     const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
     const [isMobile, setIsMobile] = useState(false);
     const [voteMode, setVoteMode] = useState<'direct' | 'questionnaire'>('direct');
-
-    // Questionnaire positions
     const [economicPos, setEconomicPos] = useState(5);
     const [socialPos, setSocialPos] = useState(5);
     const [foreignPos, setForeignPos] = useState(5);
@@ -26,13 +25,9 @@ export function VotingPanel() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    // Get candidate names for display
     const { data: candidatesData, refetch: refetchCandidates } = useReadContract({
         ...votingContract,
-        functionName: "getCandidates",
-        query: {
-            enabled: true,
-        }
+        functionName: "getCandidateNames",
     });
 
     const { data: hasVoted, refetch: refetchVoted } = useReadContract({
@@ -47,34 +42,13 @@ export function VotingPanel() {
     useEffect(() => {
         if (isSuccess) {
             setSelectedCandidate(null);
+            setProofData(null);
             setTimeout(() => {
                 refetchCandidates();
                 refetchVoted();
             }, 2000);
         }
     }, [isSuccess, refetchCandidates, refetchVoted]);
-
-    const handleProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const json = JSON.parse(event.target?.result as string);
-                const userProof = json[address?.toLowerCase() || ""];
-                if (userProof && Array.isArray(userProof)) {
-                    setProofData(userProof);
-                    alert("✅ Proof loaded!");
-                } else {
-                    alert("❌ No proof for your address");
-                }
-            } catch {
-                alert("❌ Invalid proof file");
-            }
-        };
-        reader.readAsText(file);
-    };
 
     const handleDirectVote = () => {
         if (!address || !proofData || selectedCandidate === null) return;
@@ -120,12 +94,11 @@ export function VotingPanel() {
                 fontWeight: "600",
                 textAlign: "center"
             }}>
-                ✅ You have already voted
+                You have already voted
             </div>
         );
     }
 
-    // Parse candidate data - remove duplicates
     const candidates = candidatesData ? Array.from(new Set(candidatesData as [])) : [];
 
     return (
@@ -146,35 +119,15 @@ export function VotingPanel() {
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent"
             }}>
-                🗳️ Cast Your Vote
+                Cast Your Vote
             </h2>
 
             {!proofData ? (
-                <div style={{
-                    padding: isMobile ? "1rem" : "1.5rem",
-                    border: "2px dashed #cbd5e0",
-                    borderRadius: "12px",
-                    backgroundColor: "#f7fafc"
-                }}>
-                    <h3 style={{ marginTop: 0, fontSize: isMobile ? "1rem" : "1.125rem" }}>
-                        📄 Step 1: Upload Proof
-                    </h3>
-                    <p style={{ color: "#4a5568", marginBottom: "1rem", fontSize: isMobile ? "0.75rem" : "0.875rem" }}>
-                        Upload your proofs.json file to verify eligibility
-                    </p>
-                    <input
-                        type="file"
-                        accept=".json"
-                        onChange={handleProofUpload}
-                        style={{
-                            padding: "0.5rem",
-                            border: "1px solid #cbd5e0",
-                            borderRadius: "6px",
-                            width: "100%",
-                            fontSize: isMobile ? "0.875rem" : "1rem"
-                        }}
-                    />
-                </div>
+                <ProofUpload
+                    address={address}
+                    onProofLoaded={setProofData}
+                    isMobile={isMobile}
+                />
             ) : (
                 <>
                     <div style={{
@@ -185,10 +138,9 @@ export function VotingPanel() {
                         color: "#234e52",
                         fontSize: isMobile ? "0.875rem" : "1rem"
                     }}>
-                        ✅ Proof verified - Select voting method
+                        Proof verified - Select voting method
                     </div>
 
-                    {/* Vote Mode Toggle */}
                     <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
                         <button onClick={() => setVoteMode('direct')} style={{
                             flex: 1,
@@ -218,8 +170,7 @@ export function VotingPanel() {
                         </button>
                     </div>
 
-                    {/* Direct Voting */}
-                    {voteMode === 'direct' && (
+                    {voteMode === 'direct' ? (
                         <div>
                             {candidates.length === 0 ? (
                                 <div style={{ padding: "1rem", textAlign: "center", color: "#666" }}>
@@ -283,10 +234,7 @@ export function VotingPanel() {
                                 {isPending ? "Submitting..." : "Submit Vote"}
                             </button>
                         </div>
-                    )}
-
-                    {/* Questionnaire Voting */}
-                    {voteMode === 'questionnaire' && (
+                    ) : (
                         <div>
                             <div style={{ background: "#fff3cd", padding: "12px", borderRadius: "8px", marginBottom: "20px", fontSize: "0.875rem" }}>
                                 Your answers match to the closest candidate. You won't know who you voted for (anonymous).

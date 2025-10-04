@@ -1,26 +1,26 @@
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
-import * as fs from "fs";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 
-async function main() {
-    const voters: string[] = JSON.parse(fs.readFileSync("./data/voters.json", "utf8"));
+const voters = ["0x669b237a521621a7Bc242a18B94f695f52340B9A"];
 
-    // StandardMerkleTree expects [value] for each leaf
-    const leaves = voters.map(addr => [addr]);
+// Create tree with raw addresses - StandardMerkleTree will hash them
+const tree = StandardMerkleTree.of(
+    voters.map(addr => [addr]),
+    ["address"]
+);
 
-    // Build tree - OpenZeppelin handles encoding internally
-    const tree = StandardMerkleTree.of(leaves, ["address"]);
-    const root = tree.root;
+console.log("Merkle Root:", tree.root);
 
-    console.log("Root:", root);
+// Get proof
+const proof = tree.getProof([voters[0]]);
+console.log("Proof:", proof);
 
-    const proofsObj: Record<string, string[]> = {};
-    for (const [i, v] of tree.entries()) {
-        const addr = v[0].toLowerCase();
-        proofsObj[addr] = tree.getProof(i);
-    }
+// Save
+const outputDir = join(process.cwd(), "data", "proofs");
+mkdirSync(outputDir, { recursive: true });
 
-    fs.writeFileSync("./data/proofs/proofs.json", JSON.stringify(proofsObj, null, 2));
-    fs.writeFileSync("./data/proofs/root.txt", root);
-}
+const outputPath = join(outputDir, "proofs.json");
+writeFileSync(outputPath, JSON.stringify(tree.dump(), null, 2));
 
-main();
+console.log("Saved to:", outputPath);

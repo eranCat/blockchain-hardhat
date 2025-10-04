@@ -1,24 +1,21 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "node",
+    "target": "es2020",
+    "module": "commonjs",
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "types": [
-      "node"
-    ],
-    "lib": [
-      "ES2022"
-    ]
+    "resolveJsonModule": true
   },
   "include": [
-    "scripts/**/*",
-    "test/**/*"
+    "scripts",
+    "test",
+    "ignition"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist",
+    "artifacts",
+    "cache"
   ]
 }

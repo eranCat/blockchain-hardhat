@@ -1,9 +1,10 @@
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from 'wagmi';
 import { useState, useEffect } from 'react';
 import { votingABI } from '../contracts';
+import { ProofUpload } from './ProofUpload';
 
 const votingContract = {
-    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
     abi: votingABI,
 } as const;
 
@@ -13,8 +14,6 @@ export function CandidateList() {
     const [isMobile, setIsMobile] = useState(false);
     const [voteMode, setVoteMode] = useState<'direct' | 'questionnaire'>('direct');
     const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
-
-    // Questionnaire positions
     const [economicPos, setEconomicPos] = useState(5);
     const [socialPos, setSocialPos] = useState(5);
     const [foreignPos, setForeignPos] = useState(5);
@@ -28,7 +27,7 @@ export function CandidateList() {
 
     const { data: candidatesData, error: readError, isLoading: readLoading, refetch } = useReadContract({
         ...votingContract,
-        functionName: "getCandidateDetails",
+        functionName: "getAllCandidates",
     });
 
     const { data: hasVoted, refetch: refetchVoted } = useReadContract({
@@ -37,37 +36,19 @@ export function CandidateList() {
         args: address ? [address] : undefined,
     });
 
-    const { data: hash, writeContract } = useWriteContract();
+    const { data: hash, writeContract, isPending } = useWriteContract();
     const { isSuccess } = useWaitForTransactionReceipt({ hash });
 
-    if (isSuccess) {
-        setTimeout(() => {
-            refetch();
-            refetchVoted();
-        }, 2000);
-    }
-
-    const handleProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const json = JSON.parse(event.target?.result as string);
-                const userProof = json[address?.toLowerCase() || ""];
-                if (userProof && Array.isArray(userProof)) {
-                    setProofData(userProof);
-                    alert("✅ Proof loaded!");
-                } else {
-                    alert("❌ No proof for your address");
-                }
-            } catch {
-                alert("❌ Invalid proof file");
-            }
-        };
-        reader.readAsText(file);
-    };
+    useEffect(() => {
+        if (isSuccess) {
+            setSelectedCandidate(null);
+            setProofData(null);
+            setTimeout(() => {
+                refetch();
+                refetchVoted();
+            }, 2000);
+        }
+    }, [isSuccess, refetch, refetchVoted]);
 
     const handleDirectVote = (candidateId: number) => {
         if (!proofData) {
@@ -95,26 +76,32 @@ export function CandidateList() {
 
     if (readError) {
         return (
-            <div style={{ padding: "2rem", textAlign: "center", background: "rgba(255, 255, 255, 0.95)", borderRadius: "16px", color: "#e53e3e" }}>
-                ❌ Error: {readError.message}
+            <div style={{
+                padding: "2rem",
+                textAlign: "center",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px",
+                color: "#e53e3e"
+            }}>
+                Error: {readError.message}
             </div>
         );
     }
 
     if (readLoading || !candidatesData) {
         return (
-            <div style={{ padding: "2rem", textAlign: "center", background: "rgba(255, 255, 255, 0.95)", borderRadius: "16px" }}>
+            <div style={{
+                padding: "2rem",
+                textAlign: "center",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px"
+            }}>
                 Loading candidates...
             </div>
         );
     }
 
-    const names = (candidatesData as any)[0] as string[];
-    const positions = (candidatesData as any)[1] as number[][];
-    const votes = (candidatesData as any)[2] as bigint[];
-    
-    console.log(hasVoted, proofData);
-    
+    const [names, positions, votes] = candidatesData as [string[], number[][], bigint[]];
 
     return (
         <div style={{
@@ -132,27 +119,15 @@ export function CandidateList() {
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent"
             }}>
-                Cast Your Vote
+                Candidates & Voting
             </h2>
 
-            {/* Proof Upload */}
             {address && !hasVoted && !proofData && (
-                <div style={{
-                    marginBottom: "1.5rem",
-                    padding: isMobile ? "1rem" : "1.5rem",
-                    border: "2px dashed #cbd5e0",
-                    borderRadius: "12px",
-                    backgroundColor: "#f7fafc"
-                }}>
-                    <h3 style={{ marginTop: 0, fontSize: isMobile ? "1rem" : "1.125rem" }}>📄 Upload Proof</h3>
-                    <input type="file" accept=".json" onChange={handleProofUpload} style={{
-                        padding: "0.5rem",
-                        border: "1px solid #cbd5e0",
-                        borderRadius: "6px",
-                        width: "100%",
-                        fontSize: isMobile ? "0.875rem" : "1rem"
-                    }} />
-                </div>
+                <ProofUpload
+                    address={address}
+                    onProofLoaded={setProofData}
+                    isMobile={isMobile}
+                />
             )}
 
             {hasVoted && (
@@ -164,11 +139,10 @@ export function CandidateList() {
                     color: "#22543d",
                     fontWeight: "600"
                 }}>
-                    ✅ You already voted
+                    You already voted
                 </div>
             )}
 
-            {/* Vote Mode Toggle */}
             {!hasVoted && proofData && (
                 <>
                     <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
@@ -194,12 +168,11 @@ export function CandidateList() {
                             fontWeight: "600",
                             cursor: "pointer"
                         }}>
-                            Questionnaire (Anonymous)
+                            Questionnaire
                         </button>
                     </div>
 
-                    {/* Direct Voting */}
-                    {voteMode === 'direct' && (
+                    {voteMode === 'direct' ? (
                         <div>
                             <h3>Select Candidate</h3>
                             {names.map((name, i) => (
@@ -226,25 +199,26 @@ export function CandidateList() {
                                     <p style={{ margin: "8px 0 0 0", color: "#666" }}>Votes: {votes[i].toString()}</p>
                                 </div>
                             ))}
-                            <button onClick={() => selectedCandidate !== null && handleDirectVote(selectedCandidate)} disabled={selectedCandidate === null} style={{
-                                width: "100%",
-                                padding: "15px",
-                                background: selectedCandidate === null ? "#ccc" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "8px",
-                                fontSize: "1.1rem",
-                                fontWeight: "600",
-                                cursor: selectedCandidate === null ? "not-allowed" : "pointer",
-                                marginTop: "10px"
-                            }}>
-                                Submit Vote
+                            <button
+                                onClick={() => selectedCandidate !== null && handleDirectVote(selectedCandidate)}
+                                disabled={selectedCandidate === null || isPending}
+                                style={{
+                                    width: "100%",
+                                    padding: "15px",
+                                    background: selectedCandidate === null || isPending ? "#ccc" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontSize: "1.1rem",
+                                    fontWeight: "600",
+                                    cursor: selectedCandidate === null || isPending ? "not-allowed" : "pointer",
+                                    marginTop: "10px"
+                                }}
+                            >
+                                {isPending ? "Submitting..." : "Submit Vote"}
                             </button>
                         </div>
-                    )}
-
-                    {/* Questionnaire Voting */}
-                    {voteMode === 'questionnaire' && (
+                    ) : (
                         <div>
                             <div style={{ background: "#fff3cd", padding: "15px", borderRadius: "8px", marginBottom: "20px" }}>
                                 Your answers match to the closest candidate automatically. You won't know who you voted for (anonymous).
@@ -290,18 +264,22 @@ export function CandidateList() {
                                 <strong>Your Positions:</strong> [{economicPos}, {socialPos}, {foreignPos}]
                             </div>
 
-                            <button onClick={handleQuestionnaireVote} style={{
-                                width: "100%",
-                                padding: "15px",
-                                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "8px",
-                                fontSize: "1.1rem",
-                                fontWeight: "600",
-                                cursor: "pointer"
-                            }}>
-                                Submit Anonymous Vote
+                            <button
+                                onClick={handleQuestionnaireVote}
+                                disabled={isPending}
+                                style={{
+                                    width: "100%",
+                                    padding: "15px",
+                                    background: isPending ? "#ccc" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontSize: "1.1rem",
+                                    fontWeight: "600",
+                                    cursor: isPending ? "not-allowed" : "pointer"
+                                }}
+                            >
+                                {isPending ? "Submitting..." : "Submit Anonymous Vote"}
                             </button>
                         </div>
                     )}
