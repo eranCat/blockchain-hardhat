@@ -7,8 +7,10 @@ export function AdminPanel() {
     const [isMobile, setIsMobile] = useState(false);
     const [showPanel, setShowPanel] = useState(false);
 
-    // Form states
     const [candidateName, setCandidateName] = useState('');
+    const [economic, setEconomic] = useState(5);
+    const [social, setSocial] = useState(5);
+    const [foreign, setForeign] = useState(5);
     const [merkleRoot, setMerkleRoot] = useState('');
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
@@ -17,14 +19,12 @@ export function AdminPanel() {
     const { isSuccess, isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
     const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle');
 
-    // Read existing candidates
     const { data: existingCandidates, refetch } = useReadContract({
-        address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+        address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
         abi: votingABI,
-        functionName: 'getCandidates',
+        functionName: 'getAllCandidates',
     });
 
-    // Sync txStatus with transaction states
     useEffect(() => {
         if (isPending) setTxStatus('pending');
         else if (isConfirming) setTxStatus('confirming');
@@ -49,31 +49,28 @@ export function AdminPanel() {
 
     const handleAddCandidate = async () => {
         if (!candidateName.trim()) {
-            alert('Please enter candidate name(s)');
+            alert('Please enter candidate name');
             return;
         }
 
-        const newCandidates = candidateName
-            .split(',')
-            .map(name => name.trim())
-            .filter(name => name.length > 0);
+        const current = existingCandidates as [string[], any, any] | undefined;
+        const currentNames = current?.[0] || [];
+        const currentPositions = current?.[1] || [];
 
-        if (newCandidates.length === 0) {
-            alert('Please enter valid candidate name(s)');
-            return;
-        }
-
-        const currentCandidates = (existingCandidates as string[]) || [];
-        const updatedCandidates = [...currentCandidates, ...newCandidates];
+        const allNames = [...currentNames, candidateName.trim()];
+        const allPositions = [...currentPositions, [economic, social, foreign]];
 
         writeContractAsync({
-            address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+            address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
             abi: votingABI,
             functionName: 'setCandidates',
-            args: [updatedCandidates],
+            args: [allNames, allPositions],
         });
 
         setCandidateName('');
+        setEconomic(5);
+        setSocial(5);
+        setForeign(5);
     };
 
     const handleSetMerkleRoot = async () => {
@@ -85,9 +82,9 @@ export function AdminPanel() {
         try {
             setTxStatus('pending');
             await writeContractAsync({
-                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setMerkleRoot',
+                functionName: 'setVoterRoot',
                 args: [merkleRoot as `0x${string}`],
             });
             setMerkleRoot('');
@@ -115,9 +112,9 @@ export function AdminPanel() {
         try {
             setTxStatus('pending');
             await writeContractAsync({
-                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setWindow',
+                functionName: 'setVotingWindow',
                 args: [BigInt(start), BigInt(end)],
             });
             setStartTime('');
@@ -131,7 +128,6 @@ export function AdminPanel() {
 
     return (
         <>
-            {/* Toggle Button */}
             <button
                 onClick={() => setShowPanel(!showPanel)}
                 style={{
@@ -147,10 +143,9 @@ export function AdminPanel() {
                     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}
             >
-                🔧 Admin Controls
+                Admin Controls
             </button>
 
-            {/* Overlay Panel */}
             {showPanel && (
                 <div
                     onClick={() => setShowPanel(false)}
@@ -169,7 +164,6 @@ export function AdminPanel() {
                         padding: '2rem 0'
                     }}
                 >
-                    {/* Panel */}
                     <div
                         onClick={(e) => e.stopPropagation()}
                         style={{
@@ -198,7 +192,7 @@ export function AdminPanel() {
                                 fontWeight: '700',
                                 color: '#c05621'
                             }}>
-                                🔧 Admin Controls
+                                Admin Controls
                             </h3>
                             <button
                                 onClick={() => setShowPanel(false)}
@@ -213,7 +207,7 @@ export function AdminPanel() {
                                     cursor: 'pointer'
                                 }}
                             >
-                                ✕ Close
+                                Close
                             </button>
                         </div>
 
@@ -222,8 +216,7 @@ export function AdminPanel() {
                             flexDirection: 'column',
                             gap: '1.25rem'
                         }}>
-                            {/* Transaction Status */}
-                            {txStatus !== 'idle' && (
+                            {(isPending || isConfirming) && (
                                 <div style={{
                                     padding: '0.75rem',
                                     borderRadius: '8px',
@@ -240,7 +233,6 @@ export function AdminPanel() {
                                 </div>
                             )}
 
-                            {/* Add Candidate */}
                             <div style={{
                                 padding: '1rem',
                                 background: '#ffffff',
@@ -254,26 +246,69 @@ export function AdminPanel() {
                                     fontWeight: '700',
                                     color: '#2d3748'
                                 }}>
-                                    Add Candidate(s)
+                                    Add Candidate
                                 </label>
                                 <input
                                     type="text"
                                     value={candidateName}
                                     onChange={(e) => setCandidateName(e.target.value)}
-                                    placeholder="Alice, Bob, Charlie"
+                                    placeholder="Candidate name"
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
-                                        marginBottom: '0.5rem',
+                                        marginBottom: '0.75rem',
                                         border: '2px solid #cbd5e0',
                                         borderRadius: '6px',
                                         fontSize: '0.875rem',
                                         boxSizing: 'border-box'
                                     }}
                                 />
+
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                        Economic (0-10): {economic}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={economic}
+                                        onChange={(e) => setEconomic(Number(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                        Social (0-10): {social}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={social}
+                                        onChange={(e) => setSocial(Number(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '0.75rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                        Foreign (0-10): {foreign}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={foreign}
+                                        onChange={(e) => setForeign(Number(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+
                                 <button
                                     onClick={handleAddCandidate}
-                                    disabled={txStatus !== 'idle'}
+                                    disabled={isPending || isConfirming}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
@@ -283,15 +318,14 @@ export function AdminPanel() {
                                         borderRadius: '8px',
                                         fontSize: '0.875rem',
                                         fontWeight: '700',
-                                        cursor: txStatus !== 'idle' ? 'not-allowed' : 'pointer',
-                                        opacity: txStatus !== 'idle' ? 0.6 : 1
+                                        cursor: isPending || isConfirming ? 'not-allowed' : 'pointer',
+                                        opacity: isPending || isConfirming ? 0.6 : 1
                                     }}
                                 >
-                                    {txStatus !== 'idle' ? 'Processing...' : 'Add Candidate'}
+                                    {isPending || isConfirming ? 'Processing...' : 'Add Candidate'}
                                 </button>
                             </div>
 
-                            {/* Set Merkle Root */}
                             <div style={{
                                 padding: '1rem',
                                 background: '#ffffff',
@@ -305,7 +339,7 @@ export function AdminPanel() {
                                     fontWeight: '700',
                                     color: '#2d3748'
                                 }}>
-                                    Set Merkle Root
+                                    Set Voter Root
                                 </label>
                                 <input
                                     type="text"
@@ -343,7 +377,6 @@ export function AdminPanel() {
                                 </button>
                             </div>
 
-                            {/* Set Time Window */}
                             <div style={{
                                 padding: '1rem',
                                 background: '#ffffff',

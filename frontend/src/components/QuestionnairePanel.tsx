@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { votingABI } from '../contracts';
 
 const votingContract = {
-    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS as `0x${string}`,
+    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
     abi: votingABI,
 } as const;
 
@@ -13,6 +13,8 @@ export function QuestionnairePanel() {
     const [socialPos, setSocialPos] = useState(5);
     const [foreignPos, setForeignPos] = useState(5);
     const [matchedCandidate, setMatchedCandidate] = useState<string | null>(null);
+    const [matchDistance, setMatchDistance] = useState<number>(0);
+    const [matchPercentage, setMatchPercentage] = useState<number>(0);
 
     useEffect(() => {
         setIsMobile(window.innerWidth < 768);
@@ -21,20 +23,33 @@ export function QuestionnairePanel() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    // Get full candidate details with positions
-    const { data: candidateDetails } = useReadContract({
+    const { data: candidatesData } = useReadContract({
         ...votingContract,
-        functionName: "getCandidateDetails",
+        functionName: "getAllCandidates",
     });
 
+    useEffect(() => {
+        if (candidatesData) {
+            const [names, positions, _votes] = candidatesData as [string[], readonly number[][], bigint[]];
+            console.log('All Candidates:');
+            names.forEach((name, i) => {
+                console.log(`${name}: [${positions[i].join(', ')}]`);
+            });
+        }
+    }, [candidatesData]);
+
     const calculateMatch = () => {
-        if (!candidateDetails || !Array.isArray(candidateDetails) || candidateDetails.length < 2) {
-            alert("No candidate position data available.");
+        if (!candidatesData) {
+            alert("No candidate data available.");
             return;
         }
 
-        const names = candidateDetails[0] as string[];
-        const positions = candidateDetails[1] as number[][];
+        const [names, positions, _votes] = candidatesData as [string[], readonly number[][], bigint[]];
+
+        if (names.length === 0) {
+            alert("No candidates available.");
+            return;
+        }
 
         const userPos = [economicPos, socialPos, foreignPos];
         let minDistance = Infinity;
@@ -42,8 +57,6 @@ export function QuestionnairePanel() {
 
         for (let i = 0; i < names.length; i++) {
             const candidatePos = positions[i];
-
-            if (!candidatePos || candidatePos.length !== 3) continue;
 
             const distance = Math.sqrt(
                 Math.pow(userPos[0] - candidatePos[0], 2) +
@@ -57,11 +70,13 @@ export function QuestionnairePanel() {
             }
         }
 
-        if (bestMatch) {
-            setMatchedCandidate(bestMatch);
-        } else {
-            alert("Could not calculate match.");
-        }
+        // Calculate match percentage (max distance is sqrt(10^2 + 10^2 + 10^2) = 17.32)
+        const maxDistance = Math.sqrt(300); // sqrt(10^2 * 3)
+        const percentage = Math.round((1 - minDistance / maxDistance) * 100);
+
+        setMatchedCandidate(bestMatch);
+        setMatchDistance(Math.round(minDistance * 10) / 10); // Round to 1 decimal
+        setMatchPercentage(percentage);
     };
 
     return (
@@ -176,8 +191,11 @@ export function QuestionnairePanel() {
                     <div style={{ marginTop: "6px", fontSize: "1.25rem", fontWeight: "700", color: "#764ba2" }}>
                         {matchedCandidate}
                     </div>
-                    <div style={{ marginTop: "6px", fontSize: "0.75rem", color: "#666" }}>
-                        Positions: [{economicPos}, {socialPos}, {foreignPos}]
+                    <div style={{ marginTop: "6px", fontSize: "0.85rem", color: "#555" }}>
+                        Match: <strong style={{ color: "#764ba2" }}>{matchPercentage}%</strong>
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
+                        Distance: {matchDistance}
                     </div>
                 </div>
             )}

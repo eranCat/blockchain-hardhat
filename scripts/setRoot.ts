@@ -1,32 +1,18 @@
-import { createWalletClient, http } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { sepolia } from "viem/chains";
-import * as fs from "fs";
+// scripts/setRoot.ts
+import hre from "hardhat";
 
 async function main() {
-    const votingAddress = process.env.VOTING_ADDR_SEPOLIA as `0x${string}`;
-    const account = privateKeyToAccount(process.env.SEPOLIA_PRIVATE_KEY as `0x${string}`);
+    const root = process.env.VOTER_MERKLE_ROOT;
+    const votingAddr = process.env.VOTING_ADDR_SEPOLIA;
 
-    const wallet = createWalletClient({
-        account,
-        chain: sepolia,
-        transport: http(process.env.SEPOLIA_RPC_URL)
-    });
+    if (!root) throw new Error("VOTER_MERKLE_ROOT not set");
+    if (!votingAddr) throw new Error("VOTING_ADDR_SEPOLIA not set");
 
-    const votingAbi = JSON.parse(
-        fs.readFileSync("./artifacts/contracts/Voting.sol/Voting.json", "utf8")
-    ).abi;
-
-    const rootHex = fs.readFileSync("./data/proofs/root.txt", "utf8").trim();
-
-    const hash = await wallet.writeContract({
-        address: votingAddress,
-        abi: votingAbi,
-        functionName: "setMerkleRoot",
-        args: [rootHex as `0x${string}`]
-    });
-
-    console.log(`✅ Root set: ${hash}`);
+    console.log("Setting root:", root);
+    const voting = await hre.ethers.getContractAt("Voting", votingAddr);
+    const tx = await voting.setVoterRoot(root);
+    await tx.wait();
+    console.log("✅ Root set");
 }
 
 main().catch(console.error);

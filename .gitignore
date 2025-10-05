@@ -28,3 +28,12 @@ npm-debug.log
 
 # OS-specific files
 .DS_Store
+
+# Generated files
+package-lock.json
+frontend/src/contracts/
+data/
+
+# Deployment info
+deployments/
+ignition/deployments/

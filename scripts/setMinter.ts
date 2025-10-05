@@ -1,44 +1,23 @@
-// scripts/setMinter.ts
-import { requireEnv, sendAndWait } from "./utils.js";
-import { network } from "hardhat";
-import type { Address } from "viem";
+import hre from "hardhat";
 
 async function main() {
-    // Get addresses
-    const networkArg = process.argv.find((arg, i) =>
-        process.argv[i - 1] === "--network"
-    )?.toUpperCase();
-
-    const balTokenKey = networkArg ? `BAL_TOKEN_ADDR_${networkArg}` : "";
-    const balTokenAddr = (
-        (balTokenKey && process.env[balTokenKey]) ||
-        process.env.BAL_TOKEN_ADDR ||
-        ""
-    ).trim() as Address;
-
-    const votingKey = networkArg ? `VOTING_ADDR_${networkArg}` : "";
-    const votingAddr = (
-        (votingKey && process.env[votingKey]) ||
-        process.env.VOTING_ADDR ||
-        ""
-    ).trim() as Address;
+    const balTokenAddr = process.env.BAL_TOKEN_ADDR_SEPOLIA!;
+    const votingAddr = process.env.VOTING_ADDR_SEPOLIA!;
 
     if (!balTokenAddr || !votingAddr) {
-        throw new Error("Missing BAL_TOKEN_ADDR or VOTING_ADDR");
+        throw new Error("BAL_TOKEN_ADDR_SEPOLIA or VOTING_ADDR_SEPOLIA not set in .env");
     }
 
-    console.log(`Setting minter on BALToken ${balTokenAddr}`);
-    console.log(`  Minter: ${votingAddr}`);
+    console.log("Setting minter for:");
+    console.log("  BAL Token:", balTokenAddr);
+    console.log("  Voting:", votingAddr);
 
-    const { viem } = await network.connect();
-    const balToken = await viem.getContractAt("BALToken", balTokenAddr);
+    const BALToken = await hre.ethers.getContractAt("BALToken", balTokenAddr);
+    const tx = await BALToken.setMinter(votingAddr);
+    console.log("Tx:", tx.hash);
 
-    const { hash } = await sendAndWait(balToken.write.setMinter([votingAddr]));
-
-    console.log(`✅ Minter set (tx: ${hash})`);
+    await tx.wait();
+    console.log("✅ Minter set");
 }
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+main().catch(console.error);
