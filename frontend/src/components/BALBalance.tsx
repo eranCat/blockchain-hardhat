@@ -2,7 +2,7 @@ import { useReadContract, useAccount } from 'wagmi';
 import { balTokenABI } from '../contracts';
 
 const balTokenContract = {
-    address: import.meta.env.VITE_BAL_TOKEN_CONTRACT_ADDRESS as `0x${string}`,
+    address: import.meta.env.VITE_BAL_TOKEN_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
     abi: balTokenABI,
 } as const;
 
@@ -28,7 +28,7 @@ export function BALBalance() {
 
     return (
         <span>
-            💰 {formattedBalance} {symbolStr} Ballance
+            💰 {formattedBalance} {symbolStr} Balance
         </span>
     );
 }
