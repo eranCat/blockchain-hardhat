@@ -23,7 +23,7 @@ export function VotingPanel() {
 
     const { data: candidatesData, refetch: refetchCandidates } = useReadContract({
         ...votingContract,
-        functionName: "getCandidateNames",
+        functionName: "getAllCandidates",
     });
 
     const { data: hasVoted, refetch: refetchVoted } = useReadContract({
@@ -86,7 +86,10 @@ export function VotingPanel() {
         );
     }
 
-    const candidates = candidatesData ? Array.from(new Set(candidatesData as [])) : [];
+    // Extract names from getAllCandidates result [names[], positions[][], votes[]]
+    const candidates = candidatesData
+        ? Array.from((candidatesData as [string[], any, any])[0])
+        : [];
 
     return (
         <div style={{

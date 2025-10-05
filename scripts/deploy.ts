@@ -1,39 +1,21 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
 async function main() {
-    const [deployer] = await ethers.getSigners();
-    console.log("Deploying with:", deployer.address);
+    const balTokenAddr = "0xdb4c02e1f11f512fcf0220060a9428b4f056c8ad";
+    const rewardAmount = hre.ethers.parseEther("10");
 
-    // Deploy BAL Token
-    const BALToken = await ethers.getContractFactory("BALToken");
-    const balToken = await BALToken.deploy("BAL Token", "BAL", deployer.address);
-    const balTokenAddress = await balToken.getAddress();
-    console.log("BAL Token:", balTokenAddress);
+    const Voting = await hre.ethers.getContractFactory("Voting");
+    const voting = await Voting.deploy(balTokenAddr, rewardAmount);
+    await voting.waitForDeployment();
+    const votingAddr = await voting.getAddress();
+    console.log("Voting:", votingAddr);
 
-    // Deploy NFT
-    const NFT = await ethers.getContractFactory("CandidateNFT");
-    const nft = await NFT.deploy(deployer.address);
-    const nftAddress = await nft.getAddress();
-    console.log("NFT:", nftAddress);
+    // Set minter
+    const BALToken = await hre.ethers.getContractAt("BALToken", balTokenAddr);
+    await (await BALToken.setMinter(votingAddr)).wait();
+    console.log("✅ Minter set");
 
-    // Deploy Voting
-    const Voting = await ethers.getContractFactory("Voting");
-    const voting = await Voting.deploy(balTokenAddress, 1000, nftAddress);
-    const votingAddress = await voting.getAddress();
-    console.log("Voting:", votingAddress);
-
-    // Setup (wait for previous deploys to mine first)
-    await balToken.deploymentTransaction()?.wait();
-    await nft.deploymentTransaction()?.wait();
-    await voting.deploymentTransaction()?.wait();
-
-    console.log("\nSetting up permissions...");
-    await (await balToken.setMinter(votingAddress)).wait();
-    await (await nft.transferOwnership(votingAddress)).wait();
-
-    console.log("\n✅ Deployment complete!");
-    console.log(`VITE_BAL_TOKEN_CONTRACT_ADDRESS=${balTokenAddress}`);
-    console.log(`VITE_VOTING_CONTRACT_ADDRESS=${votingAddress}`);
+    console.log(`\nVOTING_ADDR_SEPOLIA=${votingAddr}`);
 }
 
 main().catch(console.error);

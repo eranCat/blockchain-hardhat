@@ -7,7 +7,6 @@ export function AdminPanel() {
     const [isMobile, setIsMobile] = useState(false);
     const [showPanel, setShowPanel] = useState(false);
 
-    // Form states
     const [candidateName, setCandidateName] = useState('');
     const [merkleRoot, setMerkleRoot] = useState('');
     const [startTime, setStartTime] = useState('');
@@ -17,14 +16,12 @@ export function AdminPanel() {
     const { isSuccess, isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
     const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle');
 
-    // Read existing candidates
     const { data: existingCandidates, refetch } = useReadContract({
         address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
         abi: votingABI,
-        functionName: 'getCandidates',
+        functionName: 'getAllCandidates',
     });
 
-    // Sync txStatus with transaction states
     useEffect(() => {
         if (isPending) setTxStatus('pending');
         else if (isConfirming) setTxStatus('confirming');
@@ -63,14 +60,23 @@ export function AdminPanel() {
             return;
         }
 
-        const currentCandidates = (existingCandidates as string[]) || [];
-        const updatedCandidates = [...currentCandidates, ...newCandidates];
+        // Get current candidates
+        const current = existingCandidates as [string[], any, any] | undefined;
+        const currentNames = current?.[0] || [];
+        const currentPositions = current?.[1] || [];
+
+        // Combine old and new
+        const allNames = [...currentNames, ...newCandidates];
+        const allPositions = [
+            ...currentPositions,
+            ...newCandidates.map(() => [5, 5, 5]) // Default moderate positions
+        ];
 
         writeContractAsync({
             address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
             abi: votingABI,
             functionName: 'setCandidates',
-            args: [updatedCandidates],
+            args: [allNames, allPositions],
         });
 
         setCandidateName('');
@@ -87,7 +93,7 @@ export function AdminPanel() {
             await writeContractAsync({
                 address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setMerkleRoot',
+                functionName: 'setVoterRoot',
                 args: [merkleRoot as `0x${string}`],
             });
             setMerkleRoot('');
@@ -131,7 +137,6 @@ export function AdminPanel() {
 
     return (
         <>
-            {/* Toggle Button */}
             <button
                 onClick={() => setShowPanel(!showPanel)}
                 style={{
@@ -147,10 +152,9 @@ export function AdminPanel() {
                     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}
             >
-                🔧 Admin Controls
+                Admin Controls
             </button>
 
-            {/* Overlay Panel */}
             {showPanel && (
                 <div
                     onClick={() => setShowPanel(false)}
@@ -169,7 +173,6 @@ export function AdminPanel() {
                         padding: '2rem 0'
                     }}
                 >
-                    {/* Panel */}
                     <div
                         onClick={(e) => e.stopPropagation()}
                         style={{
@@ -198,7 +201,7 @@ export function AdminPanel() {
                                 fontWeight: '700',
                                 color: '#c05621'
                             }}>
-                                🔧 Admin Controls
+                                Admin Controls
                             </h3>
                             <button
                                 onClick={() => setShowPanel(false)}
@@ -213,7 +216,7 @@ export function AdminPanel() {
                                     cursor: 'pointer'
                                 }}
                             >
-                                ✕ Close
+                                Close
                             </button>
                         </div>
 
@@ -222,8 +225,7 @@ export function AdminPanel() {
                             flexDirection: 'column',
                             gap: '1.25rem'
                         }}>
-                            {/* Transaction Status */}
-                            {isPending || isConfirming && (
+                            {(isPending || isConfirming) && (
                                 <div style={{
                                     padding: '0.75rem',
                                     borderRadius: '8px',
@@ -240,7 +242,6 @@ export function AdminPanel() {
                                 </div>
                             )}
 
-                            {/* Add Candidate */}
                             <div style={{
                                 padding: '1rem',
                                 background: '#ffffff',
@@ -291,7 +292,6 @@ export function AdminPanel() {
                                 </button>
                             </div>
 
-                            {/* Set Merkle Root */}
                             <div style={{
                                 padding: '1rem',
                                 background: '#ffffff',
@@ -305,7 +305,7 @@ export function AdminPanel() {
                                     fontWeight: '700',
                                     color: '#2d3748'
                                 }}>
-                                    Set Merkle Root
+                                    Set Voter Root
                                 </label>
                                 <input
                                     type="text"
@@ -343,7 +343,6 @@ export function AdminPanel() {
                                 </button>
                             </div>
 
-                            {/* Set Time Window */}
                             <div style={{
                                 padding: '1rem',
                                 background: '#ffffff',

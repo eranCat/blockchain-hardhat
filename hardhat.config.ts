@@ -8,7 +8,7 @@ const config: HardhatUserConfig = {
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "",
       accounts: process.env.SEPOLIA_PRIVATE_KEY ? [process.env.SEPOLIA_PRIVATE_KEY] : [],
-      gasPrice: 20000000000 // 20 gwei
+      timeout: 120000,
     }
   }
 };
