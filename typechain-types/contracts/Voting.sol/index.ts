@@ -2,5 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { IBALToken } from "./IBALToken";
-export type { ICandidateNFT } from "./ICandidateNFT";
 export type { Voting } from "./Voting";

@@ -123,7 +123,7 @@ contract Voting is Ownable, ReentrancyGuard {
         if (hasVoted[msg.sender]) revert AlreadyVoted();
         if (candidateId >= _candidates.length) revert InvalidCandidateId(candidateId);
 
-        bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(msg.sender))));
         if (!MerkleProof.verify(merkleProof, voterRoot, leaf)) revert InvalidMerkleProof();
 
         hasVoted[msg.sender] = true;

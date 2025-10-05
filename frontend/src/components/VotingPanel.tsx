@@ -15,6 +15,15 @@ export function VotingPanel() {
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
+        if (address) {
+            console.log("=== DEBUG INFO ===");
+            console.log("Connected address:", address);
+            console.log("Expected address:", "0x669b237a521621a7Bc242a18B94f695f52340B9A");
+            console.log("Match:", address.toLowerCase() === "0x669b237a521621a7Bc242a18B94f695f52340B9A".toLowerCase());
+        }
+    }, [address]);
+
+    useEffect(() => {
         setIsMobile(window.innerWidth < 768);
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener("resize", handleResize);
@@ -46,15 +55,26 @@ export function VotingPanel() {
         }
     }, [isSuccess, refetchCandidates, refetchVoted]);
 
-    const handleVote = () => {
+    const handleVote = async () => {
         if (!address || !proofData || selectedCandidate === null) return;
-        writeContract({
-            ...votingContract,
-            functionName: "vote",
-            args: [BigInt(selectedCandidate), proofData],
-        });
-    };
 
+        console.log("Attempting to vote:");
+        console.log("  Candidate:", selectedCandidate);
+        console.log("  Proof:", proofData);
+        console.log("  Address:", address);
+
+        try {
+            await writeContract({
+                ...votingContract,
+                functionName: "vote",
+                args: [BigInt(selectedCandidate), proofData],
+            });
+        } catch (error: any) {
+            console.error("Vote error:", error);
+            alert(`Vote failed: ${error.shortMessage || error.message}`);
+        }
+    };
+    
     if (!address) {
         return (
             <div style={{

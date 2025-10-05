@@ -2,5 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { IBALToken__factory } from "./IBALToken__factory";
-export { ICandidateNFT__factory } from "./ICandidateNFT__factory";
 export { Voting__factory } from "./Voting__factory";

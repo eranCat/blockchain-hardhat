@@ -50,7 +50,5 @@ export type { CandidateNFT } from "./contracts/CandidateNFT";
 export { CandidateNFT__factory } from "./factories/contracts/CandidateNFT__factory";
 export type { IBALToken } from "./contracts/Voting.sol/IBALToken";
 export { IBALToken__factory } from "./factories/contracts/Voting.sol/IBALToken__factory";
-export type { ICandidateNFT } from "./contracts/Voting.sol/ICandidateNFT";
-export { ICandidateNFT__factory } from "./factories/contracts/Voting.sol/ICandidateNFT__factory";
 export type { Voting } from "./contracts/Voting.sol/Voting";
 export { Voting__factory } from "./factories/contracts/Voting.sol/Voting__factory";

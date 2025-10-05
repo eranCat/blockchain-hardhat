@@ -102,10 +102,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IBALToken__factory>;
     getContractFactory(
-      name: "ICandidateNFT",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ICandidateNFT__factory>;
-    getContractFactory(
       name: "Voting",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Voting__factory>;
@@ -221,11 +217,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IBALToken>;
     getContractAt(
-      name: "ICandidateNFT",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.ICandidateNFT>;
-    getContractAt(
       name: "Voting",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -319,10 +310,6 @@ declare module "hardhat/types/runtime" {
       name: "IBALToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IBALToken>;
-    deployContract(
-      name: "ICandidateNFT",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ICandidateNFT>;
     deployContract(
       name: "Voting",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -438,11 +425,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IBALToken>;
-    deployContract(
-      name: "ICandidateNFT",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ICandidateNFT>;
     deployContract(
       name: "Voting",
       args: any[],

@@ -1,10 +1,14 @@
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 
-const voters = ["0x669b237a521621a7Bc242a18B94f695f52340B9A"];
+// Read voters from voters.json
+const votersPath = join(process.cwd(), "data", "voters.json");
+const voters: string[] = JSON.parse(readFileSync(votersPath, "utf-8"));
 
-// Create tree with raw addresses - StandardMerkleTree will hash them
+console.log("Voters:", voters);
+
+// Create tree with raw addresses
 const tree = StandardMerkleTree.of(
     voters.map(addr => [addr]),
     ["address"]
@@ -12,11 +16,11 @@ const tree = StandardMerkleTree.of(
 
 console.log("Merkle Root:", tree.root);
 
-// Get proof
+// Get proof for first voter (for testing)
 const proof = tree.getProof([voters[0]]);
-console.log("Proof:", proof);
+console.log("Proof for", voters[0], ":", proof);
 
-// Save
+// Save tree
 const outputDir = join(process.cwd(), "data", "proofs");
 mkdirSync(outputDir, { recursive: true });
 
@@ -24,3 +28,5 @@ const outputPath = join(outputDir, "proofs.json");
 writeFileSync(outputPath, JSON.stringify(tree.dump(), null, 2));
 
 console.log("Saved to:", outputPath);
+console.log("\n⚠️  Add this to your .env:");
+console.log(`VOTER_MERKLE_ROOT=${tree.root}`);

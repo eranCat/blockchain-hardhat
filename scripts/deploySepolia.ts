@@ -1,67 +1,50 @@
 import hre from "hardhat";
 
 async function main() {
-    const [deployer] = await hre.viem.getWalletClients();
+    try {
+        const balTokenAddr = "0x7307418690bf2De4DdE9590032857152F96d447D";
+        const rewardAmount = hre.ethers.parseEther("1000");
 
-    console.log("Deploying to Sepolia...");
-    console.log("Deployer:", deployer.account.address);
-    console.log();
+        console.log("Deploying...");
+        const Voting = await hre.ethers.getContractFactory("Voting");
 
-    // Deploy BAL Token
-    console.log("Deploying BAL Token...");
-    const balToken = await hre.viem.deployContract("BALToken", [
-        "BAL Token",
-        "BAL",
-        deployer.account.address
-    ]);
-    console.log("BAL Token:", balToken.address);
+        console.log("Sending transaction...");
+        const voting = await Voting.deploy(balTokenAddr, rewardAmount);
 
-    // Deploy CandidateNFT
-    console.log("Deploying CandidateNFT...");
-    const nft = await hre.viem.deployContract("CandidateNFT", [
-        deployer.account.address
-    ]);
-    console.log("NFT:", nft.address);
+        console.log("Transaction hash:", voting.deploymentTransaction()?.hash);
+        console.log("Waiting for confirmation (this may take 1-2 minutes)...");
 
-    // Deploy Voting (1000 tokens reward per vote)
-    console.log("Deploying Voting...");
-    const voting = await hre.viem.deployContract("Voting", [
-        balToken.address,
-        1000n,  // 1000 tokens reward
-        nft.address
-    ]);
-    console.log("Voting:", voting.address);
+        // Wait with timeout
+        const address = await Promise.race([
+            voting.getAddress(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Timeout after 3 minutes")), 180000)
+            )
+        ]) as string;
 
-    // Setup permissions
-    console.log("\nSetting up permissions...");
+        console.log("\n✅ Deployed to:", address);
 
-    await balToken.write.setMinter([voting.address]);
-    console.log("BAL minter set");
+        // Set minter
+        console.log("\nSetting minter...");
+        const BALToken = await hre.ethers.getContractAt("BALToken", balTokenAddr);
+        const tx = await BALToken.setMinter(address);
+        await tx.wait();
+        console.log("✅ Minter set");
 
-    await nft.write.transferOwnership([voting.address]);
-    console.log("NFT ownership transferred");
+        console.log("\n" + "=".repeat(70));
+        console.log("UPDATE .env FILES:");
+        console.log("=".repeat(70));
+        console.log(`\nVOTING_ADDR_SEPOLIA=${address}`);
+        console.log(`VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=${address}`);
 
-    console.log("\n" + "=".repeat(70));
-    console.log("DEPLOYMENT COMPLETE!");
-    console.log("=".repeat(70));
-    console.log("\nContract Addresses:");
-    console.log(`VOTING_ADDR_SEPOLIA=${voting.address}`);
-    console.log(`BAL_TOKEN_ADDR_SEPOLIA=${balToken.address}`);
-    console.log(`CANDIDATE_NFT_ADDR=${nft.address}`);
+    } catch (error: any) {
+        console.error("\n❌ Error:", error.message);
 
-    console.log("\nNext Steps:");
-    console.log("1. Add these addresses to your .env file");
-    console.log("2. Add these addresses to frontend/.env.local:");
-    console.log(`   VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=${voting.address}`);
-    console.log(`   VITE_BAL_TOKEN_CONTRACT_ADDRESS_SEPOLIA=${balToken.address}`);
-    console.log(`   VITE_NFT_CONTRACT_ADDRESS_SEPOLIA=${nft.address}`);
-    console.log("\n3. Run setup:");
-    console.log("   npx hardhat run scripts/setup.ts --network sepolia");
+        if (error.message.includes("Timeout")) {
+            console.log("\nCheck transaction status:");
+            console.log("https://sepolia.etherscan.io");
+        }
+    }
 }
 
-main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        console.error(error);
-        process.exit(1);
-    });
+main().catch(console.error);
