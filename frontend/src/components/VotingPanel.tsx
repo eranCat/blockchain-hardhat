@@ -1,6 +1,6 @@
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from 'wagmi';
 import { useState, useEffect } from 'react';
-import { votingABI } from '../contracts';
+import { votingABI } from '../contracts/index';
 import { ProofUpload } from './ProofUpload';
 
 const votingContract = {

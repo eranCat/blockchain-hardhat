@@ -13,6 +13,7 @@
     "@nomicfoundation/hardhat-network-helpers": "^1.1.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.1.1",
+    "@nomicfoundation/hardhat-viem": "^3.0.0",
     "@nomicfoundation/ignition-core": "^0.15.13",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
@@ -26,7 +27,8 @@
     "solidity-coverage": "^0.8.16",
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "viem": "^2.37.12"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",
