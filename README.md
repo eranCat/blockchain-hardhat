@@ -10,7 +10,6 @@ Blockchain voting system with Merkle tree registry, time-bounded voting, anonymo
 - **Direct Voting** - Traditional candidate selection by ID
 - **Anonymous Questionnaire** (★5 bonus points) - Euclidean distance algorithm matches voter to closest candidate
 - **BAL Token Rewards** - ERC20 tokens automatically minted to voters
-- **Candidate NFTs** - ERC721 with 10% royalty (ERC2981) and ownership history
 - **React Frontend** - Wagmi/Viem integration with MetaMask
 
 ## Prerequisites
@@ -32,7 +31,8 @@ cd frontend
 npm install
 cd ..
 
-# Install Foundry (Windows PowerShell as Admin)
+# Install Foundry (Windows - PowerShell as Admin)
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 irm get.scoop.sh -outfile 'install-scoop.ps1'
 .\install-scoop.ps1
 scoop install foundry
@@ -48,7 +48,6 @@ SEPOLIA_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 # After deployment
 VOTING_ADDR_SEPOLIA=
 BAL_TOKEN_ADDR_SEPOLIA=
-CANDIDATE_NFT_ADDR=
 DEPLOYMENT_BLOCK=
 
 # Election config
@@ -66,7 +65,6 @@ Create `frontend/.env.local`:
 VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
 VITE_VOTING_CONTRACT_ADDRESS=
 VITE_BAL_TOKEN_CONTRACT_ADDRESS=
-VITE_CANDIDATE_NFT_CONTRACT_ADDRESS=
 ```
 
 ## Testing
@@ -98,15 +96,13 @@ npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
 ```
 
 ### Option 2: Remix IDE
-1. Upload `Voting.sol`, `BALToken.sol`, `CandidateNFT.sol` to [remix.ethereum.org](https://remix.ethereum.org)
+1. Upload `Voting.sol`, `BALToken.sol` to [remix.ethereum.org](https://remix.ethereum.org)
 2. Compile: Solidity 0.8.28, optimization 200
 3. Deploy on Sepolia:
    - `BALToken("Ballot Token", "BAL", YOUR_ADDRESS)`
-   - `CandidateNFT(YOUR_ADDRESS)`
-   - `Voting(BAL_ADDRESS, "10000000000000000000", NFT_ADDRESS)`
+   - `Voting(BAL_ADDRESS, "10000000000000000000")`
 4. Set permissions:
    - `BALToken.setMinter(VOTING_ADDRESS)`
-   - `CandidateNFT.transferOwnership(VOTING_ADDRESS)`
 
 Save addresses to `.env` and `frontend/.env.local`
 
@@ -222,7 +218,7 @@ Result: Vote goes to Alice (anonymous)
 ### Admin (onlyOwner)
 ```solidity
 setCandidate(string name, uint8[3] positions)
-setCandidates(string[] names)  // Batch with [5,5,5] default
+setCandidates(string[] names, uint8[3][] positions)
 setVoterRoot(bytes32 root)
 setVotingWindow(uint64 start, uint64 end)
 ```
@@ -236,8 +232,8 @@ voteByQuestionnaire(uint8[3] positions, bytes32[] merkleProof)
 ### Views
 ```solidity
 candidateCount() returns (uint256)
-getCandidate(uint256 id) returns (string, uint8[3], uint256)
-getResults() returns (string[], uint256[])  // Sorted by votes
+getAllCandidates() returns (string[], uint8[3][], uint256[])
+getResults() returns (string[], uint256[])
 getWinner() returns (string)
 hasVoted(address) returns (bool)
 getVotingWindow() returns (uint64, uint64)
@@ -248,26 +244,28 @@ getVotingWindow() returns (uint64, uint64)
 ```
 ├── contracts/
 │   ├── Voting.sol          # Main voting logic
-│   ├── BALToken.sol        # ERC20 reward token
-│   └── CandidateNFT.sol    # ERC721 with royalties
+│   └── BALToken.sol        # ERC20 reward token
 ├── test/
 │   └── voting.t.sol        # Foundry tests (4 passing)
 ├── scripts/
-│   ├── addCandidate.ts     # Add candidates
-│   ├── startElection.ts    # Set voting period
 │   ├── generateProofs.ts   # Create Merkle proofs
 │   ├── setRoot.ts          # Set Merkle root
 │   ├── setMinter.ts        # Grant minting permission
-│   ├── voteFromProof.ts    # CLI voting
-│   ├── checkResults.ts     # View results
-│   └── extractABI.js       # Export ABIs
+│   ├── setup.ts            # Complete election setup
+│   ├── checkState.ts       # View contract state
+│   └── directVoteSepolia.ts # CLI voting
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── ConnectWallet.tsx
 │   │   │   ├── ElectionStatus.tsx
 │   │   │   ├── CandidateList.tsx
-│   │   │   └── BALBalance.tsx
+│   │   │   ├── VotingPanel.tsx
+│   │   │   ├── QuestionnairePanel.tsx
+│   │   │   ├── ElectionResults.tsx
+│   │   │   ├── BALBalance.tsx
+│   │   │   ├── AdminPanel.tsx
+│   │   │   └── ProofUpload.tsx
 │   │   ├── contracts/       # ABI files
 │   │   └── App.tsx
 │   └── .env.local
@@ -307,22 +305,34 @@ npm install --legacy-peer-deps
 
 ### Frontend Issues
 - Update contract addresses in `frontend/.env.local`
-- Copy ABIs: `cp artifacts/contracts/*.sol/*.json frontend/src/contracts/`
+- Copy ABIs: `node scripts/extractABI.js`
 - Clear browser cache and reconnect wallet
+
+### Windows-Specific Issues
+
+**PowerShell Execution Policy**:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Foundry Path Issues**:
+```powershell
+# Add to PATH manually if scoop fails
+$env:Path += ";C:\Users\<YourUser>\scoop\shims"
+```
 
 ## Known Issues
 
 Minor limitations (no functionality impact):
 
 1. **Merkle Proofs** - Require script execution (standard practice)
-2. **NFT Minting** - Fails gracefully if misconfigured (optional feature)
-3. **Results Sorting** - O(n²) bubble sort (acceptable for <10 candidates)
-4. **Frontend Timer** - 1-second initial delay on mount
+2. **Results Sorting** - O(n²) bubble sort (acceptable for <10 candidates)
+3. **Frontend Timer** - 1-second initial delay on mount
 
 ## Course Requirements
 
 **Core (90 points):**
-- ✅ Admin interface (scripts + potential GUI)
+- ✅ Admin interface (scripts + GUI)
 - ✅ Candidate management with policy positions
 - ✅ Merkle tree voter registry
 - ✅ Time-bounded voting with validation
@@ -332,17 +342,16 @@ Minor limitations (no functionality impact):
 
 **Bonus (15+ points):**
 - ✅ Anonymous questionnaire voting (5 points) - Euclidean distance algorithm
-- ✅ Candidate NFTs with royalties (5 points) - ERC721 + ERC2981
 - ✅ React frontend with Wagmi (3 points)
 - ✅ Advanced security (2 points) - ReentrancyGuard, custom errors
 
-**Total: 105/100 points** (Original project track)
+**Total: 100/100 points** (Original project track)
 
 ## Tech Stack
 
 - **Backend**: Hardhat 2.22.0, Solidity 0.8.28, OpenZeppelin 5.4.0
 - **Testing**: Foundry
-- **Frontend**: React 18, Wagmi 2.x, Viem 2.x, TanStack Query
+- **Frontend**: React 19, Wagmi 2.x, Viem 2.x, TanStack Query
 - **Network**: Ethereum Sepolia Testnet
 - **Tools**: TypeScript, Node.js 22+
 
@@ -361,7 +370,6 @@ Minor limitations (no functionality impact):
 
 - **Voting**: [0x23770...A72](https://sepolia.etherscan.io/address/0x23770a5CDCefb121c37B83BAAaE96cCa5d475A72)
 - **BALToken**: [0xF0a47...907](https://sepolia.etherscan.io/address/0xF0a47DA0785587415d563b90576b685ba9a79907)
-- **CandidateNFT**: [0xd0532...702](https://sepolia.etherscan.io/address/0xd0532558E85b32e20481284B0DB65d375f727702)
 
 ---
 
