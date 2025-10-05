@@ -8,6 +8,9 @@ export function AdminPanel() {
     const [showPanel, setShowPanel] = useState(false);
 
     const [candidateName, setCandidateName] = useState('');
+    const [economic, setEconomic] = useState(5);
+    const [social, setSocial] = useState(5);
+    const [foreign, setForeign] = useState(5);
     const [merkleRoot, setMerkleRoot] = useState('');
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
@@ -46,31 +49,16 @@ export function AdminPanel() {
 
     const handleAddCandidate = async () => {
         if (!candidateName.trim()) {
-            alert('Please enter candidate name(s)');
+            alert('Please enter candidate name');
             return;
         }
 
-        const newCandidates = candidateName
-            .split(',')
-            .map(name => name.trim())
-            .filter(name => name.length > 0);
-
-        if (newCandidates.length === 0) {
-            alert('Please enter valid candidate name(s)');
-            return;
-        }
-
-        // Get current candidates
         const current = existingCandidates as [string[], any, any] | undefined;
         const currentNames = current?.[0] || [];
         const currentPositions = current?.[1] || [];
 
-        // Combine old and new
-        const allNames = [...currentNames, ...newCandidates];
-        const allPositions = [
-            ...currentPositions,
-            ...newCandidates.map(() => [5, 5, 5]) // Default moderate positions
-        ];
+        const allNames = [...currentNames, candidateName.trim()];
+        const allPositions = [...currentPositions, [economic, social, foreign]];
 
         writeContractAsync({
             address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
@@ -80,6 +68,9 @@ export function AdminPanel() {
         });
 
         setCandidateName('');
+        setEconomic(5);
+        setSocial(5);
+        setForeign(5);
     };
 
     const handleSetMerkleRoot = async () => {
@@ -255,23 +246,66 @@ export function AdminPanel() {
                                     fontWeight: '700',
                                     color: '#2d3748'
                                 }}>
-                                    Add Candidate(s)
+                                    Add Candidate
                                 </label>
                                 <input
                                     type="text"
                                     value={candidateName}
                                     onChange={(e) => setCandidateName(e.target.value)}
-                                    placeholder="Alice, Bob, Charlie"
+                                    placeholder="Candidate name"
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem',
-                                        marginBottom: '0.5rem',
+                                        marginBottom: '0.75rem',
                                         border: '2px solid #cbd5e0',
                                         borderRadius: '6px',
                                         fontSize: '0.875rem',
                                         boxSizing: 'border-box'
                                     }}
                                 />
+
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                        Economic (0-10): {economic}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={economic}
+                                        onChange={(e) => setEconomic(Number(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                        Social (0-10): {social}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={social}
+                                        onChange={(e) => setSocial(Number(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '0.75rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                        Foreign (0-10): {foreign}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={foreign}
+                                        onChange={(e) => setForeign(Number(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+
                                 <button
                                     onClick={handleAddCandidate}
                                     disabled={isPending || isConfirming}
