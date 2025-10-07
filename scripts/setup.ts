@@ -6,16 +6,14 @@ async function main() {
     const votingAddr = process.env.VOTING_ADDR_SEPOLIA!;
     if (!votingAddr) throw new Error("VOTING_ADDR_SEPOLIA not set");
 
-    const Voting = await hre.ethers.getContractFactory("Voting");
-    const voting = Voting.attach(votingAddr);
-
+    const voting = await ethers.getContractAt("Voting", process.env.VOTING_ADDR_SEPOLIA!);
     // 1. Set candidates
     const names = ["Alice", "Bob", "Charlie"];
     const positions = [[3, 7, 5], [7, 3, 8], [5, 5, 3]];
 
     console.log("Setting candidates...");
     try {
-        const tx1 = await voting.setCandidates(names, positions);
+        const tx1 = await (await voting.setCandidates(names, positions)).wait();
         console.log("Tx sent:", tx1.hash);
         console.log("Waiting for confirmation (30s timeout)...");
 
@@ -38,7 +36,7 @@ async function main() {
 
     console.log("\nSetting voting window...");
     try {
-        const tx2 = await voting.setVotingWindow(start, end);
+        const tx2 = await (await voting.setWindow(start, end)).wait();
         console.log("Tx sent:", tx2.hash);
         await Promise.race([
             tx2.wait(),
@@ -58,7 +56,7 @@ async function main() {
 
     console.log("\nSetting merkle root...");
     try {
-        const tx3 = await voting.setVoterRoot(root);
+        const tx3 = await (await voting.setVoterRoot(process.env.VOTER_MERKLE_ROOT! as `0x${string}`)).wait();
         console.log("Tx sent:", tx3.hash);
         await Promise.race([
             tx3.wait(),

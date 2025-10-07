@@ -6,4 +6,3 @@ xcopy /Y "artifacts\contracts\BALToken.sol\BALToken.json" "frontend\src\contract
 xcopy /Y "artifacts\contracts\CandidateNFT.sol\CandidateNFT.json" "frontend\src\contracts\"
 
 echo Done!
-pause
