@@ -59,7 +59,6 @@ function App() {
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div
               style={{
-                fontSize: '1.75rem',
                 color: '#718096',
                 background: 'rgba(0,0,0,0.03)',
                 padding: '0.35rem 0.75rem',
