@@ -28,16 +28,6 @@ export function QuestionnairePanel() {
         functionName: "getAllCandidates",
     });
 
-    useEffect(() => {
-        if (candidatesData) {
-            const [names, positions, _votes] = candidatesData as [string[], readonly number[][], bigint[]];
-            console.log('All Candidates:');
-            names.forEach((name, i) => {
-                console.log(`${name}: [${positions[i].join(', ')}]`);
-            });
-        }
-    }, [candidatesData]);
-
     const calculateMatch = () => {
         if (!candidatesData) {
             alert("No candidate data available.");

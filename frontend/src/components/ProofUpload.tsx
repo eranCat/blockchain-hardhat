@@ -1,74 +1,95 @@
+// frontend/src/components/ProofUpload.tsx
+import React, { useCallback, useId, useRef } from 'react';
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree';
 
-interface ProofUploadProps {
-    address: string | undefined;
-    onProofLoaded: (proof: `0x${string}`[]) => void;
+export type ProofMap = Record<string, string[]>;
+
+export type ProofUploadProps = {
+    address?: `0x${string}`;
+    onProofLoaded?: (proof: `0x${string}`[] | null) => void;
     isMobile?: boolean;
-}
+    onRoot?: (root: string) => void;
+    onProofs?: (map: ProofMap) => void;
+    onError?: (err: unknown) => void;
+    inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
+    children?: React.ReactNode | ((args: {
+        handleUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+        inputId: string;
+        inputRef: React.RefObject<HTMLInputElement | null>;
+    }) => React.ReactNode);
+};
 
-export function ProofUpload({ address, onProofLoaded, isMobile = false }: ProofUploadProps) {
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !address) return;
+export function ProofUpload(props: ProofUploadProps) {
+    const { address, onProofLoaded, onRoot, onProofs, onError, inputProps, children } = props;
 
+    const inputId = useId();
+    const inputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const inputEl = inputRef.current || e.currentTarget || null;
         try {
+            const file = e.currentTarget?.files?.[0] ?? null;
+            if (!file) return;
+
             const text = await file.text();
-            const json = JSON.parse(text);
+            const json: any = JSON.parse(text);
 
-            if (!json.format || !json.tree || !json.values) {
-                alert("Invalid proof file format");
+            // Case A: OpenZeppelin StandardMerkleTree dump
+            if (json?.format === 'standard-v1' && Array.isArray(json?.values)) {
+                const tree = StandardMerkleTree.load(json);
+                onRoot?.(tree.root);
+
+                const proofs: ProofMap = {};
+                for (const [i, v] of tree.entries()) {
+                    const addr = (v as unknown as [string])[0];
+                    proofs[addr] = tree.getProof(i); // use entry index per OZ docs
+                }
+                onProofs?.(proofs);
+
+                if (address && onProofLoaded) {
+                    const matchKey = Object.keys(proofs).find(k => k.toLowerCase() === address.toLowerCase());
+                    onProofLoaded((matchKey ? proofs[matchKey] : null) as `0x${string}`[] | null);
+                }
                 return;
             }
 
-            const entry = json.values.find((v: { value: string[]; treeIndex: number }) =>
-                v.value[0].toLowerCase() === address.toLowerCase()
-            );
-
-            if (!entry) {
-                alert("Your address is not in the voter list");
+            // Case B: { root, proofs }
+            if (typeof json?.root === 'string' && json?.proofs && typeof json.proofs === 'object') {
+                onRoot?.(json.root);
+                onProofs?.(json.proofs as ProofMap);
+                if (address && onProofLoaded) {
+                    const proofsMap = json.proofs as ProofMap;
+                    const matchKey = Object.keys(proofsMap).find(k => k.toLowerCase() === address.toLowerCase());
+                    onProofLoaded((matchKey ? proofsMap[matchKey] : null) as `0x${string}`[] | null);
+                }
                 return;
             }
 
-            const tree = StandardMerkleTree.load(json);
-            const proof = tree.getProof(entry.treeIndex) as `0x${string}`[];
+            throw new Error('Unsupported file format. Provide OZ tree dump or { root, proofs }.');
 
-            onProofLoaded(proof);
-            alert("Proof loaded successfully!");
-        } catch (error) {
-            console.error("Proof upload error:", error);
-            alert("Failed to load proof file");
+        } catch (err) {
+            onError?.(err);
+            console.error('Proof upload error:', err);
+        } finally {
+            if (inputEl) inputEl.value = ''; // allow re-uploading the same file
         }
-    };
+    }, [address, onError, onProofLoaded, onProofs, onRoot]);
 
+    if (typeof children === 'function') {
+        return <>{children({ handleUpload, inputId, inputRef })}</>;
+    }
+
+    // Default minimal input (safe fallback; your design can pass a custom child)
     return (
-        <div style={{
-            padding: isMobile ? "1rem" : "1.5rem",
-            border: "2px dashed #cbd5e0",
-            borderRadius: "12px",
-            backgroundColor: "#f7fafc"
-        }}>
-            <h3 style={{ marginTop: 0, fontSize: isMobile ? "1rem" : "1.125rem" }}>
-                Upload Proof
-            </h3>
-            <p style={{
-                color: "#4a5568",
-                marginBottom: "1rem",
-                fontSize: isMobile ? "0.75rem" : "0.875rem"
-            }}>
-                Upload your proofs.json file to verify eligibility
-            </p>
-            <input
-                type="file"
-                accept=".json"
-                onChange={handleUpload}
-                style={{
-                    padding: "0.5rem",
-                    border: "1px solid #cbd5e0",
-                    borderRadius: "6px",
-                    width: "100%",
-                    fontSize: isMobile ? "0.875rem" : "1rem"
-                }}
-            />
-        </div>
+        <input
+            id={inputId}
+            ref={inputRef}
+            type="file"
+            accept="application/json"
+            onChange={handleUpload}
+            {...inputProps}
+        />
     );
 }
+
+export default ProofUpload;

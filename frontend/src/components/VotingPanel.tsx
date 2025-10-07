@@ -1,3 +1,4 @@
+// frontend/src/components/VotingPanel.tsx
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from 'wagmi';
 import { useState, useEffect } from 'react';
 import { votingABI } from '../contracts/index';
@@ -13,15 +14,6 @@ export function VotingPanel() {
     const [proofData, setProofData] = useState<`0x${string}`[] | null>(null);
     const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
     const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        if (address) {
-            console.log("=== DEBUG INFO ===");
-            console.log("Connected address:", address);
-            console.log("Expected address:", "0x669b237a521621a7Bc242a18B94f695f52340B9A");
-            console.log("Match:", address.toLowerCase() === "0x669b237a521621a7Bc242a18B94f695f52340B9A".toLowerCase());
-        }
-    }, [address]);
 
     useEffect(() => {
         setIsMobile(window.innerWidth < 768);
@@ -48,33 +40,25 @@ export function VotingPanel() {
         if (isSuccess) {
             setSelectedCandidate(null);
             setProofData(null);
-            setTimeout(() => {
-                refetchCandidates();
-                refetchVoted();
-            }, 2000);
+            setTimeout(() => { refetchCandidates(); refetchVoted(); }, 2000);
         }
     }, [isSuccess, refetchCandidates, refetchVoted]);
 
     const handleVote = async () => {
         if (!address || !proofData || selectedCandidate === null) return;
-
-        console.log("Attempting to vote:");
-        console.log("  Candidate:", selectedCandidate);
-        console.log("  Proof:", proofData);
-        console.log("  Address:", address);
-
         try {
             await writeContract({
                 ...votingContract,
                 functionName: "vote",
                 args: [BigInt(selectedCandidate), proofData],
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as { shortMessage?: string; message?: string };
             console.error("Vote error:", error);
-            alert(`Vote failed: ${error.shortMessage || error.message}`);
+            alert(`Vote failed: ${err?.shortMessage || err?.message || 'Unknown error'}`);
         }
     };
-    
+
     if (!address) {
         return (
             <div style={{
@@ -106,10 +90,7 @@ export function VotingPanel() {
         );
     }
 
-    // Extract names from getAllCandidates result [names[], positions[][], votes[]]
-    const candidates = candidatesData
-        ? Array.from((candidatesData as [string[], any, any])[0])
-        : [];
+    const candidates = (candidatesData as [string[], number[][], bigint[]] | undefined)?.[0] ?? [];
 
     return (
         <div style={{
@@ -133,11 +114,7 @@ export function VotingPanel() {
             </h2>
 
             {!proofData ? (
-                <ProofUpload
-                    address={address}
-                    onProofLoaded={setProofData}
-                    isMobile={isMobile}
-                />
+                <ProofUpload address={address} onProofLoaded={setProofData} isMobile={isMobile} />
             ) : (
                 <>
                     <div style={{
@@ -186,9 +163,7 @@ export function VotingPanel() {
                                         }}>
                                             {selectedCandidate === index && "✓"}
                                         </div>
-                                        <div style={{ fontWeight: "600" }}>
-                                            {candidate}
-                                        </div>
+                                        <div style={{ fontWeight: "600" }}>{candidate}</div>
                                     </div>
                                 </button>
                             ))}
