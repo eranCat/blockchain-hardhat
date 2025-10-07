@@ -1,225 +1,113 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-interface IBALToken {
-    function mint(address to, uint256 amount) external;
-}
-
-error VotingClosed();
-error VotingNotConfigured();
-error AlreadyVoted();
-error InvalidCandidateId(uint256 candidateId);
-error InvalidMerkleProof();
-error EmptyCandidateList();
-error ZeroAddress();
-error InvalidTimeWindow(uint64 start, uint64 end);
-error InvalidPosition(uint8 position, uint8 max);
-
-contract Voting is Ownable, ReentrancyGuard {
-    uint8 private constant POSITION_COUNT = 3;
-    uint8 private constant MAX_POSITION_VALUE = 10;
-
+contract Voting is Ownable {
     struct Candidate {
         string name;
-        uint8[POSITION_COUNT] positions;
-        uint256 voteCount;
+        uint256 votes;
+        int8[3] positions;
     }
 
-    event CandidatesSet(uint256 count);
-    event VoterRootSet(bytes32 indexed root);
-    event VotingWindowSet(uint64 startTime, uint64 endTime);
-    event VoteCast(address indexed voter, uint256 indexed candidateId, bool isAnonymous);
-    event RewardMinted(address indexed voter, uint256 amount);
-
-    uint64 public votingStart;
-    uint64 public votingEnd;
     bytes32 public voterRoot;
+    uint256 public startTime;
+    uint256 public endTime;
+
+    // election lifecycle
+    uint256 public currentElectionId;
+    mapping(address => uint256) public lastVotedElection; // resets “has voted” per election
 
     Candidate[] private _candidates;
-    mapping(address => bool) public hasVoted;
 
-    IBALToken public immutable balToken;
-    uint256 public immutable rewardAmount;
+    event CandidatesSet(uint256 indexed electionId, uint256 count);
+    event WindowSet(uint256 indexed electionId, uint256 start, uint256 end);
+    event VoterRootSet(uint256 indexed electionId, bytes32 root);
+    event Voted(uint256 indexed electionId, address indexed voter, uint256 indexed candidateId);
 
-    constructor(address _balToken, uint256 _rewardAmount) Ownable(msg.sender) {
-        if (_balToken == address(0)) revert ZeroAddress();
-        balToken = IBALToken(_balToken);
-        rewardAmount = _rewardAmount;
-    }
+    constructor(address initialOwner) Ownable(initialOwner) {}
 
-    /// @notice Set all candidates with positions (clears existing)
-    function setCandidates(
-        string[] calldata names,
-        uint8[POSITION_COUNT][] calldata positions
-    ) external onlyOwner {
-        if (names.length == 0) revert EmptyCandidateList();
-        if (names.length != positions.length) revert EmptyCandidateList();
-
-        delete _candidates;
-
-        for (uint256 i = 0; i < names.length; i++) {
-            _validatePositions(positions[i]);
-            _candidates.push(Candidate({
-                name: names[i],
-                positions: positions[i],
-                voteCount: 0
-            }));
-        }
-
-        emit CandidatesSet(names.length);
-    }
-
-    function setVoterRoot(bytes32 root) external onlyOwner {
-        if (root == bytes32(0)) revert InvalidMerkleProof();
-        voterRoot = root;
-        emit VoterRootSet(root);
-    }
-
-    function setVotingWindow(uint64 _start, uint64 _end) external onlyOwner {
-        if (_end <= _start) revert InvalidTimeWindow(_start, _end);
-        votingStart = _start;
-        votingEnd = _end;
-        emit VotingWindowSet(_start, _end);
-    }
-
-    /// @notice Direct vote
-    function vote(uint256 candidateId, bytes32[] calldata merkleProof) external nonReentrant {
-        _validateVote(candidateId, merkleProof);
-        _candidates[candidateId].voteCount++;
-        _distributeReward();
-        emit VoteCast(msg.sender, candidateId, false);
-    }
-
-    /// @notice Anonymous vote by questionnaire (5 BONUS POINTS)
-    function voteByQuestionnaire(
-        uint8[POSITION_COUNT] calldata positions,
-        bytes32[] calldata merkleProof
-    ) external nonReentrant {
-        _validatePositions(positions);
-        _validateVote(0, merkleProof);
-
-        uint256 closestId = _findClosestCandidate(positions);
-        _candidates[closestId].voteCount++;
-        _distributeReward();
-
-        emit VoteCast(msg.sender, closestId, true);
-    }
-
-    function _validatePositions(uint8[POSITION_COUNT] memory positions) internal pure {
-        for (uint256 i = 0; i < POSITION_COUNT; i++) {
-            if (positions[i] > MAX_POSITION_VALUE) {
-                revert InvalidPosition(positions[i], MAX_POSITION_VALUE);
-            }
-        }
-    }
-
-    function _validateVote(uint256 candidateId, bytes32[] calldata merkleProof) internal {
-        if (votingStart == 0 || votingEnd == 0) revert VotingNotConfigured();
-        if (block.timestamp < votingStart || block.timestamp > votingEnd) revert VotingClosed();
-        if (hasVoted[msg.sender]) revert AlreadyVoted();
-        if (candidateId >= _candidates.length) revert InvalidCandidateId(candidateId);
-
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(msg.sender))));
-        if (!MerkleProof.verify(merkleProof, voterRoot, leaf)) revert InvalidMerkleProof();
-
-        hasVoted[msg.sender] = true;
-    }
-
-    function _findClosestCandidate(uint8[POSITION_COUNT] calldata voterPos) internal view returns (uint256) {
-        uint256 closestId = 0;
-        uint256 minDistance = type(uint256).max;
-
-        for (uint256 i = 0; i < _candidates.length; i++) {
-            uint256 distance = 0;
-            for (uint256 j = 0; j < POSITION_COUNT; j++) {
-                int256 diff = int256(uint256(voterPos[j])) - int256(uint256(_candidates[i].positions[j]));
-                distance += uint256(diff * diff);
-            }
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestId = i;
-            }
-        }
-
-        return closestId;
-    }
-
-    function _distributeReward() internal {
-        if (rewardAmount > 0) {
-            balToken.mint(msg.sender, rewardAmount);
-            emit RewardMinted(msg.sender, rewardAmount);
-        }
-    }
-
-    function candidateCount() external view returns (uint256) {
-        return _candidates.length;
-    }
-
-    function getVotingWindow() external view returns (uint64 start, uint64 end) {
-        return (votingStart, votingEnd);
-    }
+    function candidatesCount() external view returns (uint256) { return _candidates.length; }
 
     function getAllCandidates()
         external
         view
-        returns (
-            string[] memory names,
-            uint8[POSITION_COUNT][] memory positions,
-            uint256[] memory votes
-        )
+        returns (string[] memory names, int8[3][] memory positions, uint256[] memory votes)
     {
-        uint256 length = _candidates.length;
-        names = new string[](length);
-        positions = new uint8[POSITION_COUNT][](length);
-        votes = new uint256[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            names[i] = _candidates[i].name;
-            positions[i] = _candidates[i].positions;
-            votes[i] = _candidates[i].voteCount;
+        uint256 n = _candidates.length;
+        names = new string[](n);
+        positions = new int8[3][](n);
+        votes = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            Candidate storage c = _candidates[i];
+            names[i] = c.name;
+            positions[i] = c.positions;
+            votes[i] = c.votes;
         }
     }
 
-    function getResults() external view returns (string[] memory names, uint256[] memory votes) {
-        uint256 length = _candidates.length;
-        if (length == 0) return (new string[](0), new uint256[](0));
-
-        names = new string[](length);
-        votes = new uint256[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            names[i] = _candidates[i].name;
-            votes[i] = _candidates[i].voteCount;
+    // replace candidates for the current election
+    function setCandidates(string[] calldata names, int8[3][] calldata positions) external onlyOwner {
+        require(names.length > 0 && names.length == positions.length, "Bad lengths");
+        delete _candidates; // <-- replace, do not append
+        for (uint256 i; i < names.length; ++i) {
+            _candidates.push(Candidate({ name: names[i], votes: 0, positions: positions[i] }));
         }
-
-        // Bubble sort descending
-        for (uint256 i = 0; i < length - 1; i++) {
-            for (uint256 j = 0; j < length - i - 1; j++) {
-                if (votes[j] < votes[j + 1]) {
-                    (votes[j], votes[j + 1]) = (votes[j + 1], votes[j]);
-                    (names[j], names[j + 1]) = (names[j + 1], names[j]);
-                }
-            }
-        }
+        emit CandidatesSet(currentElectionId, names.length);
     }
 
-    function getWinner() external view returns (string memory) {
-        if (_candidates.length == 0) revert EmptyCandidateList();
+    function setWindow(uint256 start_, uint256 end_) external onlyOwner {
+        require(end_ > start_, "Bad window");
+        startTime = start_;
+        endTime = end_;
+        emit WindowSet(currentElectionId, start_, end_);
+    }
 
-        uint256 winnerId = 0;
-        uint256 maxVotes = 0;
+    function setVoterRoot(bytes32 root) external onlyOwner {
+        voterRoot = root;
+        emit VoterRootSet(currentElectionId, root);
+    }
 
-        for (uint256 i = 0; i < _candidates.length; i++) {
-            if (_candidates[i].voteCount > maxVotes) {
-                maxVotes = _candidates[i].voteCount;
-                winnerId = i;
-            }
+    // start a fresh election: bumps id and clears old votes/candidates
+    function startNewElection(uint256 start_, uint256 end_, string[] calldata names, int8[3][] calldata positions, bytes32 root)
+        external
+        onlyOwner
+    {
+        require(end_ > start_, "Bad window");
+        unchecked { ++currentElectionId; }
+        startTime = start_;
+        endTime = end_;
+        voterRoot = root;
+        delete _candidates;
+        for (uint256 i; i < names.length; ++i) {
+            _candidates.push(Candidate({ name: names[i], votes: 0, positions: positions[i] }));
         }
+        emit WindowSet(currentElectionId, start_, end_);
+        emit CandidatesSet(currentElectionId, names.length);
+        emit VoterRootSet(currentElectionId, root);
+    }
 
-        return _candidates[winnerId].name;
+    function isActive() public view returns (bool) {
+        return block.timestamp >= startTime && block.timestamp <= endTime && _candidates.length > 0;
+    }
+
+    // StandardMerkleTree leaf for ["address"] is double-hash of abi.encode(address)
+    function _stdLeaf(address a) internal pure returns (bytes32) {
+        return keccak256(bytes.concat(keccak256(abi.encode(a))));
+    }
+
+    function vote(uint256 candidateId, bytes32[] calldata proof) external {
+        require(isActive(), "Voting closed");
+        require(candidateId < _candidates.length, "Bad candidate");
+        require(lastVotedElection[msg.sender] != currentElectionId, "Already voted");
+
+        bool ok = MerkleProof.verify(proof, voterRoot, _stdLeaf(msg.sender));
+        require(ok, "Invalid Merkle proof");
+
+        _candidates[candidateId].votes += 1;
+        lastVotedElection[msg.sender] = currentElectionId;
+
+        emit Voted(currentElectionId, msg.sender, candidateId);
     }
 }

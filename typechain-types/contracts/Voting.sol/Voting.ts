@@ -26,66 +26,54 @@ import type {
 export interface VotingInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "balToken"
-      | "candidateCount"
+      | "candidatesCount"
+      | "currentElectionId"
+      | "endTime"
       | "getAllCandidates"
-      | "getResults"
-      | "getVotingWindow"
-      | "getWinner"
-      | "hasVoted"
+      | "isActive"
+      | "lastVotedElection"
       | "owner"
       | "renounceOwnership"
-      | "rewardAmount"
       | "setCandidates"
       | "setVoterRoot"
-      | "setVotingWindow"
+      | "setWindow"
+      | "startNewElection"
+      | "startTime"
       | "transferOwnership"
       | "vote"
-      | "voteByQuestionnaire"
       | "voterRoot"
-      | "votingEnd"
-      | "votingStart"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
       | "CandidatesSet"
       | "OwnershipTransferred"
-      | "RewardMinted"
-      | "VoteCast"
+      | "Voted"
       | "VoterRootSet"
-      | "VotingWindowSet"
+      | "WindowSet"
   ): EventFragment;
 
-  encodeFunctionData(functionFragment: "balToken", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "candidateCount",
+    functionFragment: "candidatesCount",
     values?: undefined
   ): string;
+  encodeFunctionData(
+    functionFragment: "currentElectionId",
+    values?: undefined
+  ): string;
+  encodeFunctionData(functionFragment: "endTime", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "getAllCandidates",
     values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "isActive", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "getResults",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "getVotingWindow",
-    values?: undefined
-  ): string;
-  encodeFunctionData(functionFragment: "getWinner", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "hasVoted",
+    functionFragment: "lastVotedElection",
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "rewardAmount",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -97,9 +85,20 @@ export interface VotingInterface extends Interface {
     values: [BytesLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "setVotingWindow",
+    functionFragment: "setWindow",
     values: [BigNumberish, BigNumberish]
   ): string;
+  encodeFunctionData(
+    functionFragment: "startNewElection",
+    values: [
+      BigNumberish,
+      BigNumberish,
+      string[],
+      [BigNumberish, BigNumberish, BigNumberish][],
+      BytesLike
+    ]
+  ): string;
+  encodeFunctionData(functionFragment: "startTime", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "transferOwnership",
     values: [AddressLike]
@@ -108,40 +107,29 @@ export interface VotingInterface extends Interface {
     functionFragment: "vote",
     values: [BigNumberish, BytesLike[]]
   ): string;
-  encodeFunctionData(
-    functionFragment: "voteByQuestionnaire",
-    values: [[BigNumberish, BigNumberish, BigNumberish], BytesLike[]]
-  ): string;
   encodeFunctionData(functionFragment: "voterRoot", values?: undefined): string;
-  encodeFunctionData(functionFragment: "votingEnd", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "votingStart",
-    values?: undefined
-  ): string;
 
-  decodeFunctionResult(functionFragment: "balToken", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "candidateCount",
+    functionFragment: "candidatesCount",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "currentElectionId",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "endTime", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getAllCandidates",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "getResults", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "isActive", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "getVotingWindow",
+    functionFragment: "lastVotedElection",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "getWinner", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "hasVoted", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "rewardAmount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -152,31 +140,25 @@ export interface VotingInterface extends Interface {
     functionFragment: "setVoterRoot",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "setWindow", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "setVotingWindow",
+    functionFragment: "startNewElection",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "startTime", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "vote", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "voteByQuestionnaire",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "voterRoot", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "votingEnd", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "votingStart",
-    data: BytesLike
-  ): Result;
 }
 
 export namespace CandidatesSetEvent {
-  export type InputTuple = [count: BigNumberish];
-  export type OutputTuple = [count: bigint];
+  export type InputTuple = [electionId: BigNumberish, count: BigNumberish];
+  export type OutputTuple = [electionId: bigint, count: bigint];
   export interface OutputObject {
+    electionId: bigint;
     count: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
@@ -198,34 +180,21 @@ export namespace OwnershipTransferredEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace RewardMintedEvent {
-  export type InputTuple = [voter: AddressLike, amount: BigNumberish];
-  export type OutputTuple = [voter: string, amount: bigint];
-  export interface OutputObject {
-    voter: string;
-    amount: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace VoteCastEvent {
+export namespace VotedEvent {
   export type InputTuple = [
+    electionId: BigNumberish,
     voter: AddressLike,
-    candidateId: BigNumberish,
-    isAnonymous: boolean
+    candidateId: BigNumberish
   ];
   export type OutputTuple = [
+    electionId: bigint,
     voter: string,
-    candidateId: bigint,
-    isAnonymous: boolean
+    candidateId: bigint
   ];
   export interface OutputObject {
+    electionId: bigint;
     voter: string;
     candidateId: bigint;
-    isAnonymous: boolean;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -234,9 +203,10 @@ export namespace VoteCastEvent {
 }
 
 export namespace VoterRootSetEvent {
-  export type InputTuple = [root: BytesLike];
-  export type OutputTuple = [root: string];
+  export type InputTuple = [electionId: BigNumberish, root: BytesLike];
+  export type OutputTuple = [electionId: bigint, root: string];
   export interface OutputObject {
+    electionId: bigint;
     root: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
@@ -245,12 +215,17 @@ export namespace VoterRootSetEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace VotingWindowSetEvent {
-  export type InputTuple = [startTime: BigNumberish, endTime: BigNumberish];
-  export type OutputTuple = [startTime: bigint, endTime: bigint];
+export namespace WindowSetEvent {
+  export type InputTuple = [
+    electionId: BigNumberish,
+    start: BigNumberish,
+    end: BigNumberish
+  ];
+  export type OutputTuple = [electionId: bigint, start: bigint, end: bigint];
   export interface OutputObject {
-    startTime: bigint;
-    endTime: bigint;
+    electionId: bigint;
+    start: bigint;
+    end: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -301,9 +276,11 @@ export interface Voting extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  balToken: TypedContractMethod<[], [string], "view">;
+  candidatesCount: TypedContractMethod<[], [bigint], "view">;
 
-  candidateCount: TypedContractMethod<[], [bigint], "view">;
+  currentElectionId: TypedContractMethod<[], [bigint], "view">;
+
+  endTime: TypedContractMethod<[], [bigint], "view">;
 
   getAllCandidates: TypedContractMethod<
     [],
@@ -317,27 +294,13 @@ export interface Voting extends BaseContract {
     "view"
   >;
 
-  getResults: TypedContractMethod<
-    [],
-    [[string[], bigint[]] & { names: string[]; votes: bigint[] }],
-    "view"
-  >;
+  isActive: TypedContractMethod<[], [boolean], "view">;
 
-  getVotingWindow: TypedContractMethod<
-    [],
-    [[bigint, bigint] & { start: bigint; end: bigint }],
-    "view"
-  >;
-
-  getWinner: TypedContractMethod<[], [string], "view">;
-
-  hasVoted: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  lastVotedElection: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   owner: TypedContractMethod<[], [string], "view">;
 
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
-  rewardAmount: TypedContractMethod<[], [bigint], "view">;
 
   setCandidates: TypedContractMethod<
     [names: string[], positions: [BigNumberish, BigNumberish, BigNumberish][]],
@@ -347,11 +310,25 @@ export interface Voting extends BaseContract {
 
   setVoterRoot: TypedContractMethod<[root: BytesLike], [void], "nonpayable">;
 
-  setVotingWindow: TypedContractMethod<
-    [_start: BigNumberish, _end: BigNumberish],
+  setWindow: TypedContractMethod<
+    [start_: BigNumberish, end_: BigNumberish],
     [void],
     "nonpayable"
   >;
+
+  startNewElection: TypedContractMethod<
+    [
+      start_: BigNumberish,
+      end_: BigNumberish,
+      names: string[],
+      positions: [BigNumberish, BigNumberish, BigNumberish][],
+      root: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  startTime: TypedContractMethod<[], [bigint], "view">;
 
   transferOwnership: TypedContractMethod<
     [newOwner: AddressLike],
@@ -360,35 +337,25 @@ export interface Voting extends BaseContract {
   >;
 
   vote: TypedContractMethod<
-    [candidateId: BigNumberish, merkleProof: BytesLike[]],
-    [void],
-    "nonpayable"
-  >;
-
-  voteByQuestionnaire: TypedContractMethod<
-    [
-      positions: [BigNumberish, BigNumberish, BigNumberish],
-      merkleProof: BytesLike[]
-    ],
+    [candidateId: BigNumberish, proof: BytesLike[]],
     [void],
     "nonpayable"
   >;
 
   voterRoot: TypedContractMethod<[], [string], "view">;
 
-  votingEnd: TypedContractMethod<[], [bigint], "view">;
-
-  votingStart: TypedContractMethod<[], [bigint], "view">;
-
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
-    nameOrSignature: "balToken"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "candidatesCount"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "candidateCount"
+    nameOrSignature: "currentElectionId"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "endTime"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "getAllCandidates"
@@ -404,34 +371,17 @@ export interface Voting extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "getResults"
-  ): TypedContractMethod<
-    [],
-    [[string[], bigint[]] & { names: string[]; votes: bigint[] }],
-    "view"
-  >;
+    nameOrSignature: "isActive"
+  ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "getVotingWindow"
-  ): TypedContractMethod<
-    [],
-    [[bigint, bigint] & { start: bigint; end: bigint }],
-    "view"
-  >;
-  getFunction(
-    nameOrSignature: "getWinner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "hasVoted"
-  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+    nameOrSignature: "lastVotedElection"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "rewardAmount"
-  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "setCandidates"
   ): TypedContractMethod<
@@ -443,41 +393,41 @@ export interface Voting extends BaseContract {
     nameOrSignature: "setVoterRoot"
   ): TypedContractMethod<[root: BytesLike], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "setVotingWindow"
+    nameOrSignature: "setWindow"
   ): TypedContractMethod<
-    [_start: BigNumberish, _end: BigNumberish],
+    [start_: BigNumberish, end_: BigNumberish],
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "startNewElection"
+  ): TypedContractMethod<
+    [
+      start_: BigNumberish,
+      end_: BigNumberish,
+      names: string[],
+      positions: [BigNumberish, BigNumberish, BigNumberish][],
+      root: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "startTime"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "vote"
   ): TypedContractMethod<
-    [candidateId: BigNumberish, merkleProof: BytesLike[]],
-    [void],
-    "nonpayable"
-  >;
-  getFunction(
-    nameOrSignature: "voteByQuestionnaire"
-  ): TypedContractMethod<
-    [
-      positions: [BigNumberish, BigNumberish, BigNumberish],
-      merkleProof: BytesLike[]
-    ],
+    [candidateId: BigNumberish, proof: BytesLike[]],
     [void],
     "nonpayable"
   >;
   getFunction(
     nameOrSignature: "voterRoot"
   ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "votingEnd"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "votingStart"
-  ): TypedContractMethod<[], [bigint], "view">;
 
   getEvent(
     key: "CandidatesSet"
@@ -494,18 +444,11 @@ export interface Voting extends BaseContract {
     OwnershipTransferredEvent.OutputObject
   >;
   getEvent(
-    key: "RewardMinted"
+    key: "Voted"
   ): TypedContractEvent<
-    RewardMintedEvent.InputTuple,
-    RewardMintedEvent.OutputTuple,
-    RewardMintedEvent.OutputObject
-  >;
-  getEvent(
-    key: "VoteCast"
-  ): TypedContractEvent<
-    VoteCastEvent.InputTuple,
-    VoteCastEvent.OutputTuple,
-    VoteCastEvent.OutputObject
+    VotedEvent.InputTuple,
+    VotedEvent.OutputTuple,
+    VotedEvent.OutputObject
   >;
   getEvent(
     key: "VoterRootSet"
@@ -515,15 +458,15 @@ export interface Voting extends BaseContract {
     VoterRootSetEvent.OutputObject
   >;
   getEvent(
-    key: "VotingWindowSet"
+    key: "WindowSet"
   ): TypedContractEvent<
-    VotingWindowSetEvent.InputTuple,
-    VotingWindowSetEvent.OutputTuple,
-    VotingWindowSetEvent.OutputObject
+    WindowSetEvent.InputTuple,
+    WindowSetEvent.OutputTuple,
+    WindowSetEvent.OutputObject
   >;
 
   filters: {
-    "CandidatesSet(uint256)": TypedContractEvent<
+    "CandidatesSet(uint256,uint256)": TypedContractEvent<
       CandidatesSetEvent.InputTuple,
       CandidatesSetEvent.OutputTuple,
       CandidatesSetEvent.OutputObject
@@ -545,29 +488,18 @@ export interface Voting extends BaseContract {
       OwnershipTransferredEvent.OutputObject
     >;
 
-    "RewardMinted(address,uint256)": TypedContractEvent<
-      RewardMintedEvent.InputTuple,
-      RewardMintedEvent.OutputTuple,
-      RewardMintedEvent.OutputObject
+    "Voted(uint256,address,uint256)": TypedContractEvent<
+      VotedEvent.InputTuple,
+      VotedEvent.OutputTuple,
+      VotedEvent.OutputObject
     >;
-    RewardMinted: TypedContractEvent<
-      RewardMintedEvent.InputTuple,
-      RewardMintedEvent.OutputTuple,
-      RewardMintedEvent.OutputObject
-    >;
-
-    "VoteCast(address,uint256,bool)": TypedContractEvent<
-      VoteCastEvent.InputTuple,
-      VoteCastEvent.OutputTuple,
-      VoteCastEvent.OutputObject
-    >;
-    VoteCast: TypedContractEvent<
-      VoteCastEvent.InputTuple,
-      VoteCastEvent.OutputTuple,
-      VoteCastEvent.OutputObject
+    Voted: TypedContractEvent<
+      VotedEvent.InputTuple,
+      VotedEvent.OutputTuple,
+      VotedEvent.OutputObject
     >;
 
-    "VoterRootSet(bytes32)": TypedContractEvent<
+    "VoterRootSet(uint256,bytes32)": TypedContractEvent<
       VoterRootSetEvent.InputTuple,
       VoterRootSetEvent.OutputTuple,
       VoterRootSetEvent.OutputObject
@@ -578,15 +510,15 @@ export interface Voting extends BaseContract {
       VoterRootSetEvent.OutputObject
     >;
 
-    "VotingWindowSet(uint64,uint64)": TypedContractEvent<
-      VotingWindowSetEvent.InputTuple,
-      VotingWindowSetEvent.OutputTuple,
-      VotingWindowSetEvent.OutputObject
+    "WindowSet(uint256,uint256,uint256)": TypedContractEvent<
+      WindowSetEvent.InputTuple,
+      WindowSetEvent.OutputTuple,
+      WindowSetEvent.OutputObject
     >;
-    VotingWindowSet: TypedContractEvent<
-      VotingWindowSetEvent.InputTuple,
-      VotingWindowSetEvent.OutputTuple,
-      VotingWindowSetEvent.OutputObject
+    WindowSet: TypedContractEvent<
+      WindowSetEvent.InputTuple,
+      WindowSetEvent.OutputTuple,
+      WindowSetEvent.OutputObject
     >;
   };
 }

@@ -18,45 +18,54 @@ function App() {
   }, []);
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-    }}>
-      <header style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        borderBottom: '1px solid rgba(255, 255, 255, 0.2)'
-      }}>
-        <div style={{
-          maxWidth: '1280px',
-          margin: '0 auto',
-          padding: isMobile ? '1rem' : '1.5rem 2rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <h1 style={{
-            fontSize: isMobile ? '1.25rem' : '1.5rem',
-            fontWeight: '700',
-            background: 'linear-gradient(45deg, #4a5568 0%, #2d3748 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}
+    >
+      <header
+        style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1280px',
+            margin: '0 auto',
+            padding: isMobile ? '1rem' : '1.5rem 2rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <h1
+            style={{
+              fontSize: isMobile ? '1.25rem' : '1.5rem',
+              fontWeight: '700',
+              background: 'linear-gradient(45deg, #4a5568 0%, #2d3748 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
             🗳️ Voting DApp
           </h1>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <div style={{
-              fontSize: '1.75rem',
-              color: '#718096',
-              background: 'rgba(0,0,0,0.03)',
-              padding: '0.35rem 0.75rem',
-              borderRadius: '8px',
-              fontWeight: '500'
-            }}>
+            <div
+              style={{
+                color: '#718096',
+                background: 'rgba(0,0,0,0.03)',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '8px',
+                fontWeight: '500',
+              }}
+            >
               <BALBalance />
             </div>
             <ConnectWallet />
@@ -67,20 +76,24 @@ function App() {
         </div>
       </header>
 
-      <main style={{
-        maxWidth: '1400px',
-        margin: '0 auto',
-        padding: isMobile ? '1.5rem 1rem' : '2rem',
-        flexGrow: 1
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-          gap: isMobile ? '1rem' : '1.5rem',
-          alignItems: 'start'
-        }}>
+      <main
+        style={{
+          maxWidth: '1400px',
+          margin: '0 auto',
+          padding: isMobile ? '1.5rem 1rem' : '2rem',
+          flexGrow: 1,
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: isMobile ? '1rem' : '1.5rem',
+            alignItems: 'start',
+          }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <VotingPanel />
+            <VotingPanel isMobile={isMobile} />
             <ElectionStatus />
           </div>
 
@@ -94,30 +107,38 @@ function App() {
         </div>
       </main>
 
-      <footer style={{
-        marginTop: '3rem',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.2)'
-      }}>
-        <div style={{
-          maxWidth: '1280px',
-          margin: '0 auto',
-          padding: isMobile ? '1.5rem 1rem' : '2rem',
-          textAlign: 'center'
-        }}>
-          <p style={{
-            marginBottom: '0.5rem',
-            color: '#4a5568',
-            fontSize: isMobile ? '0.75rem' : '0.875rem',
-            fontWeight: '600'
-          }}>
+      <footer
+        style={{
+          marginTop: '3rem',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1280px',
+            margin: '0 auto',
+            padding: isMobile ? '1.5rem 1rem' : '2rem',
+            textAlign: 'center',
+          }}
+        >
+          <p
+            style={{
+              marginBottom: '0.5rem',
+              color: '#4a5568',
+              fontSize: isMobile ? '0.75rem' : '0.875rem',
+              fontWeight: '600',
+            }}
+          >
             Powered by Ethereum • Merkle Proof Verification • ERC20 Rewards
           </p>
-          <p style={{
-            fontSize: isMobile ? '0.625rem' : '0.75rem',
-            color: '#718096'
-          }}>
+          <p
+            style={{
+              fontSize: isMobile ? '0.625rem' : '0.75rem',
+              color: '#718096',
+            }}
+          >
             A decentralized application built for the 2025 elections.
           </p>
         </div>

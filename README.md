@@ -1,377 +1,274 @@
-# Elections 2025 - Decentralized Voting DApp
+# Elections 2025 – Decentralized Voting DApp
 
-Blockchain voting system with Merkle tree registry, time-bounded voting, anonymous questionnaire matching, and ERC20 rewards.
+Time-bounded voting with a Merkle-tree registry, optional questionnaire matching, and ERC-20 rewards. Frontend is React + Wagmi; contracts are Solidity + Hardhat. Winner is revealed **only after** the election ends. Each new election resets voter eligibility.
 
-## Features
+---
 
-- **Admin Panel** - Add candidates with policy positions, set voting windows, manage voter registry
-- **Merkle Tree Registry** - Gas-efficient voter verification using OpenZeppelin StandardMerkleTree
-- **Time-Bounded Voting** - Configurable start/end timestamps with validation
-- **Direct Voting** - Traditional candidate selection by ID
-- **Anonymous Questionnaire** (★5 bonus points) - Euclidean distance algorithm matches voter to closest candidate
-- **BAL Token Rewards** - ERC20 tokens automatically minted to voters
-- **React Frontend** - Wagmi/Viem integration with MetaMask
+## Contents
+
+- [Elections 2025 – Decentralized Voting DApp](#elections-2025--decentralized-voting-dapp)
+  - [Contents](#contents)
+  - [Prerequisites](#prerequisites)
+  - [Install](#install)
+  - [Environment](#environment)
+    - [Root `.env` (Hardhat)](#root-env-hardhat)
+    - [Frontend `.env.local` (Vite)](#frontend-envlocal-vite)
+  - [One-Command Deploy \& Start Election](#one-command-deploy--start-election)
+    - [What the script does](#what-the-script-does)
+    - [Post-deploy: copy printed values into envs](#post-deploy-copy-printed-values-into-envs)
+    - [Front-end launch \& first vote](#front-end-launch--first-vote)
+  - [Contracts](#contracts)
+    - [Election lifecycle](#election-lifecycle)
+    - [Merkle proofs (Standard)](#merkle-proofs-standard)
+  - [Frontend behavior](#frontend-behavior)
+  - [Scripts reference](#scripts-reference)
+  - [Verification \& troubleshooting](#verification--troubleshooting)
+  - [Common Q\&A](#common-qa)
+  - [Tech](#tech)
+
+---
 
 ## Prerequisites
 
-- Node.js ≥ 22
-- Foundry (for tests)
-- MetaMask wallet
-- Sepolia testnet ETH ([get faucet](https://sepoliafaucet.com))
+* **Node.js** 18+ (LTS recommended)
+* **PNPM/NPM** (examples use npm)
+* **Hardhat** (installed via dev deps)
+* **A Sepolia RPC** (Alchemy/Infura) & a funded deployer key
 
-## Installation
+---
+
+## Install
 
 ```bash
-# Backend
+# from project root
 npm install
 npx hardhat compile
 
-# Frontend
-cd frontend
-npm install
-cd ..
-
-# Install Foundry (Windows - PowerShell as Admin)
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-irm get.scoop.sh -outfile 'install-scoop.ps1'
-.\install-scoop.ps1
-scoop install foundry
+# frontend deps
+cd frontend && npm install && cd ..
 ```
 
-## Environment Setup
+---
 
-Create `.env`:
-```env
+## Environment
+
+### Root `.env` (Hardhat)
+
+Create a `.env` in the project root:
+
+```ini
+# RPC + deployer
 SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
 SEPOLIA_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 
-# After deployment
-VOTING_ADDR_SEPOLIA=
-BAL_TOKEN_ADDR_SEPOLIA=
-DEPLOYMENT_BLOCK=
+# Voter registry: comma OR space separated addresses
+VOTER_ADDRESSES=0x111...,0x222...,0x333...
 
-# Election config
+# Candidates
 CANDIDATE_NAMES=Alice,Bob,Charlie
-ELECTION_START_ISO=2025-10-01T09:00:00+03:00
-ELECTION_END_ISO=2025-10-31T21:00:00+03:00
+# Optional policy positions per candidate: [[econ,social,foreign]] each 0..10
+# If omitted, defaults are used for the given names
+# CANDIDATE_POSITIONS_JSON=[[4,6,5],[6,4,5],[5,5,6]]
 
-# Merkle
-VOTER_MERKLE_ROOT=
-VOTERS_FILE=./data/voters.json
+# Election timing (pick ONE style)
+# A) Relative (default if absolute not provided)
+ELECTION_START_OFFSET_SEC=60
+ELECTION_DURATION_SEC=2592000    # 30d
+
+# B) Absolute (overrides relative)
+# ELECTION_START_TS=1730890000
+# ELECTION_END_TS=1733482000
 ```
+
+> You **do not** need to set `VOTING_ADDR_SEPOLIA` or `VOTER_MERKLE_ROOT` manually before deploy; the script prints them for you to paste afterwards.
+
+### Frontend `.env.local` (Vite)
 
 Create `frontend/.env.local`:
-```env
+
+```ini
 VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
-VITE_VOTING_CONTRACT_ADDRESS=
-VITE_BAL_TOKEN_CONTRACT_ADDRESS=
+# VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA will be pasted after deploy
 ```
 
-## Testing
+---
+
+## One-Command Deploy & Start Election
+
+Run:
 
 ```bash
-# Foundry tests (4 tests)
-forge test
-
-# Or via npm
-npm test
-
-# With gas report
-forge test --gas-report
+npx hardhat run scripts/deployAndStartElection.ts --network sepolia
 ```
 
-Expected output:
-```
-[PASS] test_DeploymentSuccess()
-[PASS] test_AddCandidate()
-[PASS] test_BatchSetCandidates()
-[PASS] test_RevertInvalidPosition()
-```
+### What the script does
 
-## Deployment
+1. Builds a **Standard Merkle Tree** from `VOTER_ADDRESSES`
+2. Writes `data/proofs/tree.json` and `data/proofs/proofs.json`
+3. Deploys `Voting`
+4. Calls `startNewElection(start, end, names, positions, root)`
 
-### Option 1: Hardhat Ignition (Recommended)
-```bash
-npx hardhat ignition deploy ignition/modules/VotingModule.ts --network sepolia
-```
+   * replaces candidates
+   * sets window
+   * sets voter root
+   * **bumps election id** so previous votes don’t carry over
+5. **Copies ABIs** into `frontend/src/contracts/`
+6. Prints three lines:
 
-### Option 2: Remix IDE
-1. Upload `Voting.sol`, `BALToken.sol` to [remix.ethereum.org](https://remix.ethereum.org)
-2. Compile: Solidity 0.8.28, optimization 200
-3. Deploy on Sepolia:
-   - `BALToken("Ballot Token", "BAL", YOUR_ADDRESS)`
-   - `Voting(BAL_ADDRESS, "10000000000000000000")`
-4. Set permissions:
-   - `BALToken.setMinter(VOTING_ADDRESS)`
+   ```
+   VOTING_ADDR_SEPOLIA=0x...
+   VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=0x...
+   VOTER_MERKLE_ROOT=0x...
+   ```
 
-Save addresses to `.env` and `frontend/.env.local`
+### Post-deploy: copy printed values into envs
 
-## Configuration
+From the script output, **copy/paste** exactly as follows:
 
-### 1. Add Candidates
-```bash
-# Via script
-npx hardhat run --network sepolia scripts/addCandidate.ts
+* In **root** `.env` (used by scripts):
 
-# Or in Remix
-setCandidate("Alice", [3, 7, 5])  # [economics, social, foreign] 0-10
-setCandidate("Bob", [7, 3, 8])
-setCandidate("Charlie", [5, 5, 3])
-```
+  ```ini
+  VOTING_ADDR_SEPOLIA=0x...       # paste from script output
+  VOTER_MERKLE_ROOT=0x...         # paste from script output
+  ```
+* In **frontend/.env.local** (used by Vite):
 
-### 2. Set Voting Window
-```bash
-npx hardhat run --network sepolia scripts/startElection.ts
-```
+  ```ini
+  VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=0x...   # paste from script output
+  ```
 
-Or in Remix:
-```solidity
-// Get timestamp: Math.floor(Date.now() / 1000) in browser console
-setVotingWindow(START_TIMESTAMP, END_TIMESTAMP)
-```
+> **Restart the frontend dev server** after updating envs so it picks up the new address & ABIs.
 
-### 3. Setup Voter Registry
+### Front-end launch & first vote
 
-Create `data/voters.json`:
-```json
-["0x669b237a521621a7Bc242a18B94f695f52340B9A", "0x70997970..."]
-```
-
-Generate proofs:
-```bash
-npx hardhat run scripts/generateProofs.ts
-```
-
-Set root:
-```bash
-# Copy from data/proofs/root.txt to .env
-npx hardhat run --network sepolia scripts/setRoot.ts
-```
-
-### 4. Grant Minter Role
-```bash
-npx hardhat run --network sepolia scripts/setMinter.ts
-```
-
-## Usage
-
-### Frontend
 ```bash
 cd frontend
 npm run dev
 ```
 
-Visit `http://localhost:5173`
+In the UI:
 
-**Features:**
-- Connect MetaMask
-- Upload your `proofs.json` file
-- Vote directly or via questionnaire
-- View BAL token balance
-
-### CLI Voting
-```bash
-# Vote with Merkle proof
-npx hardhat run --network sepolia scripts/voteFromProof.ts
-
-# Check results
-npx hardhat run --network sepolia scripts/checkResults.ts
-
-# Check BAL balance
-npx hardhat run --network sepolia scripts/checkBALBalance.ts
-```
-
-### Admin Scripts
-```bash
-npx hardhat run --network sepolia scripts/checkCandidates.ts
-npx hardhat run --network sepolia scripts/checkWindow.ts
-```
-
-## Questionnaire Voting Algorithm
-
-Anonymous voting uses Euclidean distance to find closest match:
-
-```
-distance = √[(v₁-c₁)² + (v₂-c₂)² + (v₃-c₃)²]
-```
-
-Where vᵢ = voter position, cᵢ = candidate position on topic i (scale 0-10)
-
-**Example:**
-```
-Voter: [7, 4, 5]
-
-Alice:   [8, 3, 6] → distance = √3  ← Closest
-Bob:     [2, 9, 4] → distance = √51
-Charlie: [5, 5, 8] → distance = √13
-
-Result: Vote goes to Alice (anonymous)
-```
-
-**Policy Topics:**
-1. **Economics** - 0=Free Market, 10=Gov Control
-2. **Social** - 0=Traditional, 10=Progressive  
-3. **Foreign** - 0=Isolationist, 10=Interventionist
-
-## Smart Contract API
-
-### Admin (onlyOwner)
-```solidity
-setCandidate(string name, uint8[3] positions)
-setCandidates(string[] names, uint8[3][] positions)
-setVoterRoot(bytes32 root)
-setVotingWindow(uint64 start, uint64 end)
-```
-
-### Voting
-```solidity
-vote(uint256 candidateId, bytes32[] merkleProof)
-voteByQuestionnaire(uint8[3] positions, bytes32[] merkleProof)
-```
-
-### Views
-```solidity
-candidateCount() returns (uint256)
-getAllCandidates() returns (string[], uint8[3][], uint256[])
-getResults() returns (string[], uint256[])
-getWinner() returns (string)
-hasVoted(address) returns (bool)
-getVotingWindow() returns (uint64, uint64)
-```
-
-## Project Structure
-
-```
-├── contracts/
-│   ├── Voting.sol          # Main voting logic
-│   └── BALToken.sol        # ERC20 reward token
-├── test/
-│   └── voting.t.sol        # Foundry tests (4 passing)
-├── scripts/
-│   ├── generateProofs.ts   # Create Merkle proofs
-│   ├── setRoot.ts          # Set Merkle root
-│   ├── setMinter.ts        # Grant minting permission
-│   ├── setup.ts            # Complete election setup
-│   ├── checkState.ts       # View contract state
-│   └── directVoteSepolia.ts # CLI voting
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ConnectWallet.tsx
-│   │   │   ├── ElectionStatus.tsx
-│   │   │   ├── CandidateList.tsx
-│   │   │   ├── VotingPanel.tsx
-│   │   │   ├── QuestionnairePanel.tsx
-│   │   │   ├── ElectionResults.tsx
-│   │   │   ├── BALBalance.tsx
-│   │   │   ├── AdminPanel.tsx
-│   │   │   └── ProofUpload.tsx
-│   │   ├── contracts/       # ABI files
-│   │   └── App.tsx
-│   └── .env.local
-├── data/
-│   ├── voters.json          # Voter addresses
-│   └── proofs/
-│       ├── proofs.json      # Generated proofs
-│       └── root.txt         # Merkle root
-└── ignition/modules/
-    └── VotingModule.ts      # Deployment config
-```
-
-## Troubleshooting
-
-### Dependency Conflicts
-If `npm install` fails:
-```bash
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install --legacy-peer-deps
-```
-
-### RPC Rate Limits
-- Add `DEPLOYMENT_BLOCK` to `.env`
-- Switch to Infura: `https://sepolia.infura.io/v3/YOUR_KEY`
-- Use paid tier for production
-
-### Common Errors
-
-| Error                | Solution                                        |
-| -------------------- | ----------------------------------------------- |
-| `AlreadyVoted`       | Each address votes once (by design)             |
-| `InvalidMerkleProof` | Ensure root is set and address in `voters.json` |
-| `VotingClosed`       | Check window with `getVotingWindow()`           |
-| `InvalidCandidateId` | Use ID from 0 to `candidateCount()-1`           |
-| Transaction stuck    | Reset MetaMask account                          |
-
-### Frontend Issues
-- Update contract addresses in `frontend/.env.local`
-- Copy ABIs: `node scripts/extractABI.js`
-- Clear browser cache and reconnect wallet
-
-### Windows-Specific Issues
-
-**PowerShell Execution Policy**:
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-**Foundry Path Issues**:
-```powershell
-# Add to PATH manually if scoop fails
-$env:Path += ";C:\Users\<YourUser>\scoop\shims"
-```
-
-## Known Issues
-
-Minor limitations (no functionality impact):
-
-1. **Merkle Proofs** - Require script execution (standard practice)
-2. **Results Sorting** - O(n²) bubble sort (acceptable for <10 candidates)
-3. **Frontend Timer** - 1-second initial delay on mount
-
-## Course Requirements
-
-**Core (90 points):**
-- ✅ Admin interface (scripts + GUI)
-- ✅ Candidate management with policy positions
-- ✅ Merkle tree voter registry
-- ✅ Time-bounded voting with validation
-- ✅ Results display with winner calculation
-- ✅ ERC20 BAL token rewards (automatic)
-- ✅ MetaMask integration
-
-**Bonus (15+ points):**
-- ✅ Anonymous questionnaire voting (5 points) - Euclidean distance algorithm
-- ✅ React frontend with Wagmi (3 points)
-- ✅ Advanced security (2 points) - ReentrancyGuard, custom errors
-
-**Total: 100/100 points** (Original project track)
-
-## Tech Stack
-
-- **Backend**: Hardhat 2.22.0, Solidity 0.8.28, OpenZeppelin 5.4.0
-- **Testing**: Foundry
-- **Frontend**: React 19, Wagmi 2.x, Viem 2.x, TanStack Query
-- **Network**: Ethereum Sepolia Testnet
-- **Tools**: TypeScript, Node.js 22+
-
-## Resources
-
-- [Hardhat Docs](https://hardhat.org/docs)
-- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
-- [Foundry Book](https://book.getfoundry.sh)
-- [Wagmi Docs](https://wagmi.sh)
-- [Viem Docs](https://viem.sh)
-- [Remix IDE](https://remix.ethereum.org)
-- [Sepolia Faucet](https://sepoliafaucet.com)
-- [Etherscan Sepolia](https://sepolia.etherscan.io)
-
-## Deployed Contracts (Sepolia)
-
-- **Voting**: [0x23770...A72](https://sepolia.etherscan.io/address/0x23770a5CDCefb121c37B83BAAaE96cCa5d475A72)
-- **BALToken**: [0xF0a47...907](https://sepolia.etherscan.io/address/0xF0a47DA0785587415d563b90576b685ba9a79907)
+1. Click **Upload** and select `data/proofs/proofs.json`
+2. Connect a wallet that’s listed in `VOTER_ADDRESSES`
+3. Select a candidate → **Submit Vote**
+4. After confirmation, the panel switches to: `You voted to <name>`
 
 ---
 
-**Author:** Eran Karaso  
-**Course:** Blockchain Development 2025
+## Contracts
+
+* `Voting.sol` (Ownable): manages candidates, windows, voter root, and votes
+* Merkle verification uses **OpenZeppelin Standard** leaf format
+* New elections are created via `startNewElection(...)` which resets who can vote
+
+### Election lifecycle
+
+* `startNewElection(start,end,names,positions,root)`
+
+  * `currentElectionId` increments
+  * candidate list replaced; vote counts start at 0
+  * `lastVotedElection[address]` causes all addresses to be eligible to vote again
+* Public views used by the frontend:
+
+  * `getAllCandidates() → (names, positions, votes)`
+  * `startTime()`, `endTime()`, `isActive()`
+  * `hasVoted(address)` (per election)
+
+### Merkle proofs (Standard)
+
+Leaves are computed as:
+
+```
+leaf = keccak256(bytes.concat( keccak256(abi.encode(address)) ))
+```
+
+The script and UI generate/consume `proofs.json` accordingly. **Roots must match** the file you upload.
+
+---
+
+## Frontend behavior
+
+* **Proof upload** accepts either OZ Standard dump (`tree.json`) or `{ root, proofs }`
+* **Voting panel**
+
+  * Blocks submission if uploaded root ≠ on-chain root
+  * After success, shows `You voted to <name>` (and stays disabled)
+* **Election status**
+
+  * Reflects `startTime`, `endTime`, and `isActive` (original UI)
+* **Election results**
+
+  * Auto-refreshes on `Voted` events (with light polling fallback)
+  * Shows progress bars during the election
+  * Shows a winner banner **only after** end time
+
+---
+
+## Scripts reference
+
+* `scripts/deployAndStartElection.ts`
+
+  * One-shot deploy → start new election → copy ABIs → write proofs
+* `scripts/generateProofs.ts`
+
+  * Standalone proofs generation (OZ Standard) from `VOTER_ADDRESSES`
+* `scripts/checkState.ts`
+
+  * Prints contract address, candidate count, window timestamps, current time, and merkle root
+* `scripts/setup.ts` (legacy)
+
+  * Multi-step setter calls; use only if you need manual control
+
+---
+
+## Verification & troubleshooting
+
+**Verify state**
+
+```bash
+npx hardhat run scripts/checkState.ts --network sepolia
+```
+
+Look for:
+
+* `Address` matches your frontend `.env.local`
+* `Voting Active: true` (or check start/end)
+* `Merkle Root` equals `root` inside `data/proofs/proofs.json`
+
+**Common issues**
+
+* *Vote reverts (“Invalid proof” / simulation fails)*
+
+  * The uploaded root doesn’t match on-chain root → redeploy or re-upload correct file
+  * The connected wallet is not in `VOTER_ADDRESSES`
+  * Election is not active / candidateId invalid
+* *Results don’t update immediately*
+
+  * The UI refetches on `Voted` + polls; if needed, refresh the page
+* *New election still shows old candidates or voters can’t vote again*
+
+  * Always use `startNewElection(...)` to reset; the one-command deploy already does this
+
+---
+
+## Common Q&A
+
+**Do I need to run a separate script to copy ABIs?**
+No. ABIs are copied into `frontend/src/contracts/` by `deployAndStartElection.ts`.
+
+**Do I need to manually put the root in `.env` before deploying?**
+No. The script prints the values to paste afterwards.
+
+**Where do I get proofs for a new election?**
+The deploy script regenerates `data/proofs/proofs.json` and `tree.json` each time from `VOTER_ADDRESSES`.
+
+**Can I add/remove voters mid-election?**
+Not in this default flow. Create a new election with a new root.
+
+---
+
+## Tech
+
+* Hardhat 2.x, Solidity 0.8.x, OpenZeppelin 5.x
+* React 18/19, Wagmi 2.x, Viem 2.x
+* Network: Sepolia

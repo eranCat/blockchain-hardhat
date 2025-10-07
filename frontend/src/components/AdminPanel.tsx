@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { votingABI } from '../contracts';
 
@@ -25,14 +25,25 @@ export function AdminPanel() {
         functionName: 'getAllCandidates',
     });
 
+    // For closing on outside click using overlay + Esc key
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!showPanel) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setShowPanel(false);
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [showPanel]);
+
     useEffect(() => {
         if (isPending) setTxStatus('pending');
         else if (isConfirming) setTxStatus('confirming');
         else if (isSuccess) {
             setTxStatus('success');
             refetch();
-        }
-        else if (error) setTxStatus('error');
+        } else if (error) setTxStatus('error');
         else setTxStatus('idle');
     }, [isPending, isConfirming, isSuccess, error, refetch]);
 
@@ -44,7 +55,6 @@ export function AdminPanel() {
     }, []);
 
     const isAdmin = address?.toLowerCase() === import.meta.env.VITE_ADMIN_ADDRESS?.toLowerCase();
-
     if (!isAdmin) return null;
 
     const handleAddCandidate = async () => {
@@ -52,7 +62,6 @@ export function AdminPanel() {
             alert('Please enter candidate name');
             return;
         }
-
         const current = existingCandidates as [string[], any, any] | undefined;
         const currentNames = current?.[0] || [];
         const currentPositions = current?.[1] || [];
@@ -78,7 +87,6 @@ export function AdminPanel() {
             alert('Please enter a valid Merkle root (0x...)');
             return;
         }
-
         try {
             setTxStatus('pending');
             await writeContractAsync({
@@ -100,21 +108,18 @@ export function AdminPanel() {
             alert('Please select both start and end times');
             return;
         }
-
         const start = Math.floor(new Date(startTime).getTime() / 1000);
         const end = Math.floor(new Date(endTime).getTime() / 1000);
-
         if (end <= start) {
             alert('End time must be after start time');
             return;
         }
-
         try {
             setTxStatus('pending');
             await writeContractAsync({
                 address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setVotingWindow',
+                functionName: 'setWindow', // <-- your working name
                 args: [BigInt(start), BigInt(end)],
             });
             setStartTime('');
@@ -148,13 +153,12 @@ export function AdminPanel() {
 
             {showPanel && (
                 <div
-                    onClick={() => setShowPanel(false)}
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={() => setShowPanel(false)}          // close on outside click (overlay)
                     style={{
                         position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
+                        inset: 0,
                         background: 'rgba(0, 0, 0, 0.5)',
                         zIndex: 1000,
                         backdropFilter: 'blur(2px)',
@@ -165,12 +169,13 @@ export function AdminPanel() {
                     }}
                 >
                     <div
-                        onClick={(e) => e.stopPropagation()}
+                        ref={panelRef}
+                        onClick={(e) => e.stopPropagation()}       // keep clicks inside open
                         style={{
                             width: isMobile ? '90%' : '500px',
                             maxHeight: '85vh',
                             overflowY: 'auto',
-                            padding: isMobile ? '1.25rem' : '1.5rem',
+                            padding: isMobile ? '0' : '0',           // move padding inside sections so header can be sticky full-width
                             background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.95) 100%)',
                             backdropFilter: 'blur(10px)',
                             borderRadius: '16px',
@@ -180,18 +185,25 @@ export function AdminPanel() {
                             margin: 'auto'
                         }}
                     >
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '1.25rem'
-                        }}>
-                            <h3 style={{
+                        {/* Sticky header */}
+                        <div
+                            style={{
+                                position: 'sticky',
+                                top: 0,
+                                zIndex: 5,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: isMobile ? '1rem' : '1.25rem 1.5rem',
                                 margin: 0,
-                                fontSize: '1.25rem',
-                                fontWeight: '700',
-                                color: '#c05621'
-                            }}>
+                                background: 'linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.95) 100%)',
+                                borderTopLeftRadius: '16px',
+                                borderTopRightRadius: '16px',
+                                borderBottom: '1px solid #e2e8f0',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                            }}
+                        >
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#c05621' }}>
                                 Admin Controls
                             </h3>
                             <button
@@ -203,7 +215,7 @@ export function AdminPanel() {
                                     borderRadius: '8px',
                                     color: 'white',
                                     fontSize: '0.875rem',
-                                    fontWeight: '600',
+                                    fontWeight: 600,
                                     cursor: 'pointer'
                                 }}
                             >
@@ -211,11 +223,8 @@ export function AdminPanel() {
                             </button>
                         </div>
 
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '1.25rem'
-                        }}>
+                        {/* Body */}
+                        <div style={{ padding: isMobile ? '1.25rem' : '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             {(isPending || isConfirming) && (
                                 <div style={{
                                     padding: '0.75rem',
@@ -223,7 +232,7 @@ export function AdminPanel() {
                                     background: txStatus === 'success' ? '#c6f6d5' : txStatus === 'error' ? '#fed7d7' : '#feebc8',
                                     border: `2px solid ${txStatus === 'success' ? '#48bb78' : txStatus === 'error' ? '#fc8181' : '#ed8936'}`,
                                     fontSize: '0.875rem',
-                                    fontWeight: '600',
+                                    fontWeight: 600,
                                     color: txStatus === 'success' ? '#22543d' : txStatus === 'error' ? '#742a2a' : '#7c2d12'
                                 }}>
                                     {txStatus === 'pending' && 'Waiting for wallet confirmation...'}
@@ -233,19 +242,9 @@ export function AdminPanel() {
                                 </div>
                             )}
 
-                            <div style={{
-                                padding: '1rem',
-                                background: '#ffffff',
-                                borderRadius: '12px',
-                                border: '2px solid #e2e8f0'
-                            }}>
-                                <label style={{
-                                    display: 'block',
-                                    marginBottom: '0.5rem',
-                                    fontSize: '0.875rem',
-                                    fontWeight: '700',
-                                    color: '#2d3748'
-                                }}>
+                            {/* Add Candidate */}
+                            <div style={{ padding: '1rem', background: '#ffffff', borderRadius: '12px', border: '2px solid #e2e8f0' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 700, color: '#2d3748' }}>
                                     Add Candidate
                                 </label>
                                 <input
@@ -263,49 +262,24 @@ export function AdminPanel() {
                                         boxSizing: 'border-box'
                                     }}
                                 />
-
                                 <div style={{ marginBottom: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4a5568' }}>
                                         Economic (0-10): {economic}
                                     </label>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="10"
-                                        value={economic}
-                                        onChange={(e) => setEconomic(Number(e.target.value))}
-                                        style={{ width: '100%' }}
-                                    />
+                                    <input type="range" min="0" max="10" value={economic} onChange={(e) => setEconomic(Number(e.target.value))} style={{ width: '100%' }} />
                                 </div>
-
                                 <div style={{ marginBottom: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4a5568' }}>
                                         Social (0-10): {social}
                                     </label>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="10"
-                                        value={social}
-                                        onChange={(e) => setSocial(Number(e.target.value))}
-                                        style={{ width: '100%' }}
-                                    />
+                                    <input type="range" min="0" max="10" value={social} onChange={(e) => setSocial(Number(e.target.value))} style={{ width: '100%' }} />
                                 </div>
-
                                 <div style={{ marginBottom: '0.75rem' }}>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#4a5568' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4a5568' }}>
                                         Foreign (0-10): {foreign}
                                     </label>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="10"
-                                        value={foreign}
-                                        onChange={(e) => setForeign(Number(e.target.value))}
-                                        style={{ width: '100%' }}
-                                    />
+                                    <input type="range" min="0" max="10" value={foreign} onChange={(e) => setForeign(Number(e.target.value))} style={{ width: '100%' }} />
                                 </div>
-
                                 <button
                                     onClick={handleAddCandidate}
                                     disabled={isPending || isConfirming}
@@ -317,7 +291,7 @@ export function AdminPanel() {
                                         border: 'none',
                                         borderRadius: '8px',
                                         fontSize: '0.875rem',
-                                        fontWeight: '700',
+                                        fontWeight: 700,
                                         cursor: isPending || isConfirming ? 'not-allowed' : 'pointer',
                                         opacity: isPending || isConfirming ? 0.6 : 1
                                     }}
@@ -326,19 +300,9 @@ export function AdminPanel() {
                                 </button>
                             </div>
 
-                            <div style={{
-                                padding: '1rem',
-                                background: '#ffffff',
-                                borderRadius: '12px',
-                                border: '2px solid #e2e8f0'
-                            }}>
-                                <label style={{
-                                    display: 'block',
-                                    marginBottom: '0.5rem',
-                                    fontSize: '0.875rem',
-                                    fontWeight: '700',
-                                    color: '#2d3748'
-                                }}>
+                            {/* Set Voter Root */}
+                            <div style={{ padding: '1rem', background: '#ffffff', borderRadius: '12px', border: '2px solid #e2e8f0' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 700, color: '#2d3748' }}>
                                     Set Voter Root
                                 </label>
                                 <input
@@ -368,7 +332,7 @@ export function AdminPanel() {
                                         border: 'none',
                                         borderRadius: '8px',
                                         fontSize: '0.875rem',
-                                        fontWeight: '700',
+                                        fontWeight: 700,
                                         cursor: isPending || isConfirming ? 'not-allowed' : 'pointer',
                                         opacity: isPending || isConfirming ? 0.6 : 1
                                     }}
@@ -377,19 +341,9 @@ export function AdminPanel() {
                                 </button>
                             </div>
 
-                            <div style={{
-                                padding: '1rem',
-                                background: '#ffffff',
-                                borderRadius: '12px',
-                                border: '2px solid #e2e8f0'
-                            }}>
-                                <label style={{
-                                    display: 'block',
-                                    marginBottom: '0.5rem',
-                                    fontSize: '0.875rem',
-                                    fontWeight: '700',
-                                    color: '#2d3748'
-                                }}>
+                            {/* Set Voting Window */}
+                            <div style={{ padding: '1rem', background: '#ffffff', borderRadius: '12px', border: '2px solid #e2e8f0' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 700, color: '#2d3748' }}>
                                     Set Voting Window
                                 </label>
                                 <input
@@ -431,7 +385,7 @@ export function AdminPanel() {
                                         border: 'none',
                                         borderRadius: '8px',
                                         fontSize: '0.875rem',
-                                        fontWeight: '700',
+                                        fontWeight: 700,
                                         cursor: isPending || isConfirming ? 'not-allowed' : 'pointer',
                                         opacity: isPending || isConfirming ? 0.6 : 1
                                     }}

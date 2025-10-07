@@ -1,172 +1,146 @@
-import { useReadContract } from 'wagmi';
-import { votingABI } from '../contracts';
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react'
+import { useReadContract, useWatchContractEvent } from 'wagmi'
+import { votingABI } from '../contracts'
 
-// Use the existing contract configuration
-const votingContract = {
-    address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
-    abi: votingABI,
-} as const;
+const VOTING_ADDRESS = import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`
 
-interface CandidateResult {
-    name: string;
-    votes: bigint;
-    percentage: number;
-}
+type AllCandidates = [string[], number[][], bigint[]]
 
 export function ElectionResults() {
-    const [isMobile, setIsMobile] = useState(false);
+    const {
+        data: all,
+        refetch: refetchAll,
+    } = useReadContract({
+        address: VOTING_ADDRESS,
+        abi: votingABI,
+        functionName: 'getAllCandidates',
+        // light polling in case events are missed
+        query: { refetchInterval: 15000 },
+    })
 
-    useEffect(() => {
-        setIsMobile(window.innerWidth < 768);
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    const { data: endTs } = useReadContract({
+        address: VOTING_ADDRESS,
+        abi: votingABI,
+        functionName: 'endTime',
+        query: { refetchInterval: 60000 },
+    })
 
-    // NOTE: Removed the explicit generic type. Wagmi/Viem infers the return type 
-    // [string[], bigint[]] from the 'votingContract' object and 'functionName'.
-    const { data: resultsData, isLoading, isError, error } = useReadContract({
-        ...votingContract,
-        functionName: 'getResults',
-        // Poll for results update every 5 seconds
-        query: {
-            refetchInterval: 5000,
-        }
-    });
+    useWatchContractEvent({
+        address: VOTING_ADDRESS,
+        abi: votingABI,
+        eventName: 'Voted',
+        onLogs: () => refetchAll(),
+    })
+    useWatchContractEvent({
+        address: VOTING_ADDRESS,
+        abi: votingABI,
+        eventName: 'CandidatesSet',
+        onLogs: () => refetchAll(),
+    })
 
-    let processedResults: CandidateResult[] = [];
-    let totalVotes = 0n;
-    let totalVotesNumber = 0;
+    const ended = useMemo(() => (endTs ? Date.now() > Number(endTs) * 1000 : false), [endTs])
 
-    if (resultsData) {
-        // The type is correctly inferred as [string[], bigint[]] here
-        // The destructuring is now type-safe:
-        const [candidates, votes] = resultsData as [string[], bigint[]];
+    const { names, votes, winnerIndex, total } = useMemo(() => {
+        const data = all as AllCandidates | undefined
+        const names = data?.[0] ?? []
+        const votes = (data?.[2] ?? []).map(v => Number(v))
+        const total = votes.reduce((a, b) => a + b, 0)
+        let wi = -1
+        let best = -1
+        votes.forEach((v, i) => {
+            if (v > best) {
+                best = v
+                wi = i
+            }
+        })
+        return { names, votes, winnerIndex: wi, total }
+    }, [all])
 
-        // Add a check to ensure we have candidate names and corresponding vote counts
-        if (candidates.length > 0 && candidates.length === votes.length) {
-            // Explicitly type 'sum' and 'current' as 'bigint' to fix TS error 7006
-            totalVotes = votes.reduce((sum: bigint, current: bigint) => sum + current, 0n);
-            totalVotesNumber = Number(totalVotes);
-
-            // Process results
-            // Explicitly type 'name' as 'string' and 'index' as 'number' to fix TS error 7006
-            processedResults = candidates.map((name: string, index: number): CandidateResult => {
-                const currentVotes = votes[index];
-                const percentage = totalVotes > 0n
-                    ? (Number(currentVotes) * 100) / totalVotesNumber
-                    : 0;
-
-                return {
-                    name,
-                    votes: currentVotes,
-                    percentage: parseFloat(percentage.toFixed(2))
-                };
-            })
-                // Explicitly type 'a' and 'b' as 'CandidateResult' to fix TS error 7006
-                .sort((a: CandidateResult, b: CandidateResult) => b.votes > a.votes ? 1 : b.votes < a.votes ? -1 : 0);
-        }
-    }
-
-    // --- Styles & Helpers ---
-    const cardStyle: React.CSSProperties = {
-        padding: isMobile ? '1rem' : '1.5rem',
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(237, 242, 247, 0.95) 100%)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '16px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        animation: 'slideIn 0.5s ease-out 0.2s both',
-    };
-
-    const loaderStyle: React.CSSProperties = {
-        padding: '1rem',
-        textAlign: 'center',
-        color: '#4a5568'
-    };
-
-    // --- Rendering ---
-    if (isLoading) {
+    if (!names.length) {
         return (
-            <div className='glass-card' style={{ ...cardStyle, ...loaderStyle }}>
-                <span className='spinner' /> Fetching election results...
-            </div>
-        );
-    }
-
-    if (isError) {
-        // This is the branch that executes due to the contract revert
-        return (
-            <div className='glass-card' style={{ ...cardStyle, padding: '1rem', color: '#e53e3e', fontWeight: '600' }}>
-                ❌ Error fetching results. Check if candidates are initialized.
-                <div style={{ fontSize: '0.75rem', marginTop: '0.5rem', opacity: '0.8' }}>
-                    Error details: {error?.message.substring(0, 100)}...
+            <div style={{ padding: '1rem', background: '#fde8e8', color: '#9b2c2c', borderRadius: 12 }}>
+                Error fetching results. Check if candidates are initialized.
+                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                    Using getAllCandidates() from ABI.
                 </div>
             </div>
-        );
+        )
     }
+
+    const safeTotal = total || 1
 
     return (
-        <div className='glass-card' style={cardStyle}>
-            <h2 style={{
-                fontSize: isMobile ? '1.25rem' : '1.5rem',
-                marginBottom: '1.5rem',
-                fontWeight: '700',
-                color: '#2d3748',
-                borderBottom: '2px solid #667eea',
-                paddingBottom: '0.5rem'
-            }}>
-                📊 Live Election Results
-            </h2>
+        <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.95)', borderRadius: 12 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12 }}>Election Results</h3>
 
-            {totalVotesNumber === 0 && processedResults.length === 0 ? (
-                <div style={{ padding: '1rem', textAlign: 'center', color: '#4a5568', fontWeight: '500' }}>
-                    No candidates found or no votes cast yet.
+            {ended && winnerIndex >= 0 && (
+                <div
+                    style={{
+                        marginBottom: 14,
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        background: '#c6f6d5',
+                        color: '#22543d',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                    }}
+                >
+                    <span style={{ fontSize: 18 }}>🏆</span>
+                    <span>Winner: {names[winnerIndex]}</span>
+                    <span style={{ marginLeft: 'auto', opacity: 0.9 }}>
+                        {votes[winnerIndex]} ({Math.round((votes[winnerIndex] / safeTotal) * 100)}%)
+                    </span>
                 </div>
-            ) : (
-                <>
-                    <div style={{ marginBottom: '1.5rem', fontSize: isMobile ? '1rem' : '1.125rem', fontWeight: '700', color: '#4a5568' }}>
-                        Total Votes Cast: {totalVotes.toString()}
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        {processedResults.map((result, index) => (
-                            <div key={index}>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    marginBottom: '0.5rem',
-                                    fontSize: isMobile ? '0.875rem' : '1rem',
-                                    fontWeight: '600',
-                                    color: '#2d3748'
-                                }}>
-                                    <span>{result.name}</span>
-                                    <span style={{ color: '#667eea' }}>
-                                        {result.votes.toString()} Votes ({result.percentage}%)
-                                    </span>
-                                </div>
-
-                                {/* Progress Bar Visualization */}
-                                <div style={{
-                                    height: '10px',
-                                    backgroundColor: '#e2e8f0',
-                                    borderRadius: '5px',
-                                    overflow: 'hidden'
-                                }}>
-                                    <div style={{
-                                        width: `${result.percentage}%`,
-                                        height: '100%',
-                                        background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                                        transition: 'width 0.5s ease-out'
-                                    }} />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </>
             )}
+
+            {!ended && (
+                <div
+                    style={{
+                        marginBottom: 12,
+                        padding: 10,
+                        borderRadius: 8,
+                        background: '#fffbea',
+                        color: '#7a5d00',
+                        fontWeight: 600,
+                    }}
+                >
+                    Results are provisional. Final winner will be shown after the election ends.
+                </div>
+            )}
+
+            {names.map((n, i) => {
+                const pct = Math.round((votes[i] / safeTotal) * 100)
+                const highlight = ended && i === winnerIndex
+                return (
+                    <div key={i} style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
+                            <span>{n}</span>
+                            <span>
+                                {votes[i]} ({pct}%)
+                            </span>
+                        </div>
+                        <div
+                            style={{
+                                height: 10,
+                                background: '#e2e8f0',
+                                borderRadius: 6,
+                                overflow: 'hidden',
+                                marginTop: 6,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: `${pct}%`,
+                                    height: '100%',
+                                    background: highlight ? '#667eea' : '#a3bffa',
+                                }}
+                            />
+                        </div>
+                    </div>
+                )
+            })}
         </div>
-    );
+    )
 }
