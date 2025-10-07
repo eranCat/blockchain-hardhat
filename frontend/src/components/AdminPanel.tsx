@@ -114,7 +114,7 @@ export function AdminPanel() {
             await writeContractAsync({
                 address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setVotingWindow',
+                functionName: 'setWindow',
                 args: [BigInt(start), BigInt(end)],
             });
             setStartTime('');
