@@ -1,267 +1,330 @@
+// contracts/Voting.sol
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
-/*
-  Voting.sol
-  - Backwards-compatible to existing frontend/tests: keeps public names and signatures.
-  - Session-based reset: votingSession + lastVotedSession (cheap, scalable).
-  - startNewElection(...) increments session so previous voters can vote again.
-  - getAllCandidates(), getCandidate(), getCandidatesCount()/candidateCountView(), hasVoted(), getVotingWindow(), getVoterMerkleRoot() kept for compatibility.
-  - Uses OpenZeppelin Ownable (call Ownable(msg.sender) in constructor to satisfy OZ v5).
-*/
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-
+/**
+ * @dev Minimal interface for the reward token (BALToken)
+ */
 interface IBALToken {
     function mint(address to, uint256 amount) external;
 }
 
-contract Voting is Ownable {
-    using MerkleProof for bytes32[];
+/**
+ * @dev Minimal interface for the NFT minter
+ */
+interface ICandidateNFT {
+    function mintTo(address to, string calldata uri) external returns (uint256);
+}
 
-    /* ========== EVENTS ========== */
-    event CandidateAdded(uint256 indexed id, string name);
-    event ElectionStarted(uint256 indexed session, uint64 start, uint64 end, bytes32 merkleRoot);
-    event VoteCast(address indexed voter, uint256 indexed candidateId, uint256 session);
-    event RewardPerVoteSet(uint256 reward);
+/**
+ * @title Voting
+ * @notice Merkle-gated, time-bounded election with ERC20 rewards and NFT-backed candidates.
+ * - Admin sets candidates and election window.
+ * - Voters (in Merkle tree) can vote once per session (direct OR questionnaire).
+ * - Voters receive BAL token rewards per vote.
+ * - Each candidate is linked to a minted NFT (id + URI) on creation.
+ */
+contract Voting is Ownable, ReentrancyGuard {
+    // ----------------------------- Types ------------------------------
 
-    /* ========== ERRORS ========== */
-    error VotingClosed();
-    error InvalidCandidate();
-    error AlreadyVoted();
-    error NotWhitelisted();
-    error InvalidWindow();
-
-    /* ========== STRUCTS ========== */
     struct Candidate {
         string name;
         uint8[3] positions;
         uint256 votes;
-        bool exists;
+        uint8[3] positions; // [economics, social, foreign] - 0..10
     }
 
-    /* ========== STATE (names preserved for ABI compatibility) ========== */
+    // ---------------------------- Storage -----------------------------
 
-    // public mapping and public count: keep getters identical to older ABI
-    mapping(uint256 => Candidate) public candidates;
-    uint256 public candidateCount;
+    Candidate[] private _candidates;
 
-    // voting window
-    uint64 public votingStart;
-    uint64 public votingEnd;
+    // Parallel NFT metadata (no change to Candidate layout)
+    uint256[] private _candidateTokenIds;
+    string[] private _candidateTokenUris;
 
-    // session-based reset
-    uint256 public votingSession;
-    mapping(address => uint256) public lastVotedSession;
+    // Voting session window
+    uint64 public startTime;
+    uint64 public endTime;
 
-    // merkle root for whitelist (0 => open)
-    bytes32 public voterMerkleRoot;
+    // Session id to separate rounds (fixes "Already voted" across sessions)
+    uint256 public currentElectionId;
+    mapping(address => uint256) public lastVotedElection;
 
-    // BAL token reward
+    // Merkle root of eligible voters
+    bytes32 public voterRoot;
+
+    // Rewards
     IBALToken public immutable balToken;
     uint256 public rewardPerVote;
 
-    /* ========== CONSTRUCTOR ==========
-       Call Ownable(msg.sender) to satisfy OpenZeppelin v5 Ownable constructor
-    */
-    constructor(address _balToken, uint256 _rewardPerVote) Ownable(msg.sender) {
-        require(_balToken != address(0), "BAL token addr zero");
-        balToken = IBALToken(_balToken);
-        rewardPerVote = _rewardPerVote;
+    // NFT
+    ICandidateNFT public candidateNft;
+
+    // ----------------------------- Events -----------------------------
+
+    event CandidateAdded(uint256 indexed id, string name, uint256 tokenId, string uri);
+    event ElectionStarted(uint256 indexed electionId, uint64 startTs, uint64 endTs);
+    event Voted(address indexed voter, uint256 indexed electionId, uint256 indexed candidateId);
+    event VoterRootUpdated(bytes32 root);
+    event RewardPerVoteUpdated(uint256 amount);
+    event CandidateNFTContractUpdated(address nft);
+    event CandidatesCleared(uint256 prevCount);
+
+    // ---------------------------- Errors ------------------------------
+
+    error VotingClosed();
+    error AlreadyVoted();
+    error InvalidWindow();
+    error InvalidCandidateId();
+    error NotEligible();
+
+    // --------------------------- Constructor --------------------------
+
+    constructor(address balToken_, address candidateNft_, uint256 rewardPerVote_) Ownable(msg.sender) {
+        require(balToken_ != address(0) && candidateNft_ != address(0), "addr=0");
+        balToken = IBALToken(balToken_);
+        candidateNft = ICandidateNFT(candidateNft_);
+        rewardPerVote = rewardPerVote_;
     }
 
-    /* ========== ADMIN ========== */
+    // ---------------------------- Modifiers ---------------------------
 
-    /// @notice Start a new election (resets votingSession so previous voters can vote again)
-    /// @param _start unix timestamp start
-    /// @param _end unix timestamp end
-    /// @param _names candidate names
-    /// @param _positions candidate 3-number position vectors
-    /// @param _voterMerkleRoot merkle root for whitelist (0x0 = open)
-    function startNewElection(
-        uint64 _start,
-        uint64 _end,
-        string[] calldata _names,
-        uint8[3][] calldata _positions,
-        bytes32 _voterMerkleRoot
+    modifier onlyActive() {
+        if (!_isActive()) revert VotingClosed();
+        _;
+    }
+
+    // --------------------------- Admin API ----------------------------
+
+    /**
+     * @notice Set / replace the NFT contract (if redeployed).
+     */
+    function setCandidateNft(address nft) external onlyOwner {
+        require(nft != address(0), "nft=0");
+        candidateNft = ICandidateNFT(nft);
+        emit CandidateNFTContractUpdated(nft);
+    }
+
+    /**
+     * @notice Replace all candidates and mint NFTs atomically.
+     * @param names Candidate names
+     * @param positions Candidate 3-topic vectors
+     * @param uris TokenURIs for each candidate NFT
+     * @param receivers Receivers of newly minted candidate NFTs
+     */
+    function setCandidatesWithNFT(
+        string[] calldata names,
+        uint8[3][] calldata positions,
+        string[] calldata uris,
+        address[] calldata receivers
     ) external onlyOwner {
-        if (_end <= _start) revert InvalidWindow();
-        if (_names.length == 0) revert InvalidCandidate();
-        if (_positions.length != _names.length) revert InvalidCandidate();
+        require(
+            names.length > 0 &&
+            names.length == positions.length &&
+            names.length == uris.length &&
+            names.length == receivers.length,
+            "bad lengths"
+        );
 
-        // increment session to "reset" who can vote (cheap)
-        unchecked { votingSession++; }
+        uint256 prev = _candidates.length;
+        delete _candidates;
+        delete _candidateTokenIds;
+        delete _candidateTokenUris;
+        if (prev > 0) emit CandidatesCleared(prev);
 
-        // clear old candidates (delete mapping entries)
-        for (uint256 i = 0; i < candidateCount; i++) {
-            delete candidates[i];
-        }
-        candidateCount = 0;
-
-        // add new candidates
-        for (uint256 i = 0; i < _names.length; i++) {
-            candidates[candidateCount] = Candidate({
-                name: _names[i],
-                positions: _positions[i],
+        for (uint256 i; i < names.length; ++i) {
+            _candidates.push(Candidate({
+                name: names[i],
                 votes: 0,
-                exists: true
-            });
-            emit CandidateAdded(candidateCount, _names[i]);
-            candidateCount++;
+                positions: positions[i]
+            }));
+            uint256 tokenId = candidateNft.mintTo(receivers[i], uris[i]);
+            _candidateTokenIds.push(tokenId);
+            _candidateTokenUris.push(uris[i]);
+            emit CandidateAdded(i, names[i], tokenId, uris[i]);
+        }
+    }
+
+    /**
+     * @notice Start a new election window. Resets all tallies and bumps session id.
+     */
+    function startElection(uint64 startTs, uint64 endTs) external onlyOwner {
+        if (startTs >= endTs) revert InvalidWindow();
+
+        unchecked { currentElectionId += 1; }
+
+        // Clear tallies
+        for (uint256 i; i < _candidates.length; ++i) {
+            _candidates[i].votes = 0;
         }
 
-        // set window & merkle
-        votingStart = _start;
-        votingEnd = _end;
-        voterMerkleRoot = _voterMerkleRoot;
-
-        emit ElectionStarted(votingSession, _start, _end, _voterMerkleRoot);
+        startTime = startTs;
+        endTime = endTs;
+        emit ElectionStarted(currentElectionId, startTs, endTs);
     }
 
-    /// @notice Set reward per vote (same name as previous)
-    function setRewardPerVote(uint256 _reward) external onlyOwner {
-        rewardPerVote = _reward;
-        emit RewardPerVoteSet(_reward);
+    /**
+     * @notice Update Merkle root of eligible voters.
+     */
+    function setVoterRoot(bytes32 root) external onlyOwner {
+        voterRoot = root;
+        emit VoterRootUpdated(root);
     }
 
-    /// @notice Manually bump session (owner-only) — keeps same name/signature
-    function bumpSession() external onlyOwner {
-        unchecked { votingSession++; }
-        emit ElectionStarted(votingSession, votingStart, votingEnd, voterMerkleRoot);
+    /**
+     * @notice Update reward per vote (wei-denominated ERC20 amount with 18 decimals).
+     */
+    function setRewardPerVote(uint256 amount) external onlyOwner {
+        rewardPerVote = amount;
+        emit RewardPerVoteUpdated(amount);
     }
 
-    /// @notice Update merkle root (owner)
-    function setRoot(bytes32 _root) external onlyOwner {
-        voterMerkleRoot = _root;
+    // ---------------------------- Voting ------------------------------
+
+    /**
+     * @notice Direct vote for a candidate by id.
+     */
+    function vote(uint256 candidateId, bytes32[] calldata merkleProof) external onlyActive nonReentrant {
+        _checkEligible(msg.sender, merkleProof);
+        _castVote(candidateId);
     }
 
-    function setWindow(uint64 _start, uint64 _end) external onlyOwner {
-        votingStart = _start;
-        votingEnd = _end;
-    }
+    /**
+     * @notice Anonymous questionnaire: submit your [3] topic positions; vote goes to the closest candidate (Euclidean).
+     */
+    function voteByQuestionnaire(uint8[3] calldata voterPos, bytes32[] calldata merkleProof)
+        external
+        onlyActive
+        nonReentrant
+    {
+        _checkEligible(msg.sender, merkleProof);
 
-    /* ========== VOTING ========== */
+        uint256 n = _candidates.length;
+        if (n == 0) revert InvalidCandidateId();
 
-    /// @notice Vote for a candidate (direct vote). Signature and name preserved.
-    /// @param candidateId candidate index
-    /// @param merkleProof proof if whitelist enabled (otherwise pass empty)
-    function vote(uint256 candidateId, bytes32[] calldata merkleProof) external {
-        uint256 nowTs = block.timestamp;
-        if (nowTs < votingStart || nowTs > votingEnd) revert VotingClosed();
-        if (!candidates[candidateId].exists) revert InvalidCandidate();
+        uint256 best = 0;
+        uint256 bestScore = _distanceSquared(voterPos, _candidates[0].positions);
 
-        if (voterMerkleRoot != bytes32(0)) {
-            bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
-            if (!merkleProof.verify(voterMerkleRoot, leaf)) revert NotWhitelisted();
-        }
-
-        if (lastVotedSession[msg.sender] == votingSession) revert AlreadyVoted();
-
-        lastVotedSession[msg.sender] = votingSession;
-        candidates[candidateId].votes += 1;
-
-        if (rewardPerVote > 0) {
-            balToken.mint(msg.sender, rewardPerVote);
-        }
-
-        emit VoteCast(msg.sender, candidateId, votingSession);
-    }
-
-    /// @notice Questionnaire-based vote: provide a 3-element positions array; contract finds the closest candidate
-    /// @param voterPositions 3-values in same scale as candidate positions
-    /// @param merkleProof merkle proof if whitelist enabled
-    function voteByQuestionnaire(uint8[3] calldata voterPositions, bytes32[] calldata merkleProof) external {
-        uint256 nowTs = block.timestamp;
-        if (nowTs < votingStart || nowTs > votingEnd) revert VotingClosed();
-
-        if (voterMerkleRoot != bytes32(0)) {
-            bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
-            if (!merkleProof.verify(voterMerkleRoot, leaf)) revert NotWhitelisted();
-        }
-
-        if (lastVotedSession[msg.sender] == votingSession) revert AlreadyVoted();
-
-        uint256 bestId = type(uint256).max;
-        uint256 bestDistSq = type(uint256).max;
-
-        for (uint256 i = 0; i < candidateCount; i++) {
-            Candidate storage c = candidates[i];
-            unchecked {
-                uint256 dx = c.positions[0] > voterPositions[0] ? c.positions[0] - voterPositions[0] : voterPositions[0] - c.positions[0];
-                uint256 dy = c.positions[1] > voterPositions[1] ? c.positions[1] - voterPositions[1] : voterPositions[1] - c.positions[1];
-                uint256 dz = c.positions[2] > voterPositions[2] ? c.positions[2] - voterPositions[2] : voterPositions[2] - c.positions[2];
-                uint256 distSq = dx * dx + dy * dy + dz * dz;
-                if (distSq < bestDistSq) {
-                    bestDistSq = distSq;
-                    bestId = i;
-                }
+        for (uint256 i = 1; i < n; ++i) {
+            uint256 score = _distanceSquared(voterPos, _candidates[i].positions);
+            if (score < bestScore) {
+                bestScore = score;
+                best = i;
             }
         }
+        _castVote(best);
+    }
 
-        require(bestId != type(uint256).max, "No candidates");
-        lastVotedSession[msg.sender] = votingSession;
-        candidates[bestId].votes += 1;
+    function _castVote(uint256 candidateId) internal {
+        if (candidateId >= _candidates.length) revert InvalidCandidateId();
+        if (lastVotedElection[msg.sender] == currentElectionId) revert AlreadyVoted();
 
+        _candidates[candidateId].votes += 1;
+        lastVotedElection[msg.sender] = currentElectionId;
+
+        // Reward voter
         if (rewardPerVote > 0) {
             balToken.mint(msg.sender, rewardPerVote);
         }
 
-        emit VoteCast(msg.sender, bestId, votingSession);
+        emit Voted(msg.sender, currentElectionId, candidateId);
     }
 
-    /* ========== VIEWS (compatibility helpers) ========== */
+    // ----------------------------- Views ------------------------------
 
-    /// @notice Return number of candidates (compatibility)
-    function getCandidatesCount() external view returns (uint256) {
-        return candidateCount;
+    function isActive() external view returns (bool) { return _isActive(); }
+
+    function candidateCount() external view returns (uint256) { return _candidates.length; }
+
+    function hasVoted(address user) external view returns (bool) {
+        return lastVotedElection[user] == currentElectionId;
     }
 
-    /// @notice Alias kept for older callers
-    function candidateCountView() external view returns (uint256) {
-        return candidateCount;
+    function getVotingWindow() external view returns (uint64, uint64) { return (startTime, endTime); }
+
+    function winnerId() public view returns (uint256 id) {
+        uint256 n = _candidates.length;
+        if (n == 0) return 0;
+        uint256 best = 0;
+        for (uint256 i = 1; i < n; ++i) {
+            if (_candidates[i].votes > _candidates[best].votes) best = i;
+        }
+        return best;
     }
 
-    /// @notice Return candidate details (alias)
-    function getCandidate(uint256 id) external view returns (string memory name, uint8[3] memory positions, uint256 votes, bool exists) {
-        Candidate memory c = candidates[id];
-        return (c.name, c.positions, c.votes, c.exists);
+    function getWinnerWithNft()
+        external
+        view
+        returns (uint256 id, string memory name, uint256 votes, uint256 tokenId, string memory uri)
+    {
+        if (_candidates.length == 0) return (0, "", 0, 0, "");
+        id = winnerId();
+        Candidate storage c = _candidates[id];
+        return (id, c.name, c.votes, _candidateTokenIds[id], _candidateTokenUris[id]);
     }
 
-    /// @notice Return all candidates as parallel arrays for easier frontend consumption
-    function getAllCandidates() external view returns (
-        string[] memory names,
-        uint8[3][] memory positions,
-        uint256[] memory votes,
-        bool[] memory exists
-    ) {
-        uint256 n = candidateCount;
+    function getCandidateMeta(uint256 id_)
+        external
+        view
+        returns (string memory name, uint8[3] memory pos, uint256 votes, uint256 tokenId, string memory uri)
+    {
+        if (id_ >= _candidates.length) revert InvalidCandidateId();
+        Candidate storage c = _candidates[id_];
+        return (c.name, c.positions, c.votes, _candidateTokenIds[id_], _candidateTokenUris[id_]);
+    }
+
+    function getAllCandidates()
+        external
+        view
+        returns (string[] memory names, uint8[3][] memory pos, uint256[] memory votes)
+    {
+        uint256 n = _candidates.length;
         names = new string[](n);
-        positions = new uint8[3][](n);
+        pos = new uint8[3][](n);
         votes = new uint256[](n);
         exists = new bool[](n);
 
         for (uint256 i = 0; i < n; i++) {
             Candidate storage c = candidates[i];
             names[i] = c.name;
-            positions[i] = c.positions;
+            pos[i] = c.positions;
             votes[i] = c.votes;
-            exists[i] = c.exists;
         }
     }
 
-    /// @notice Whether `account` has voted in the current session
-    function hasVoted(address account) external view returns (bool) {
-        return lastVotedSession[account] == votingSession;
+    function getResults() external view returns (string[] memory names, uint256[] memory votes) {
+        uint256 n = _candidates.length;
+        names = new string[](n);
+        votes = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            names[i] = _candidates[i].name;
+            votes[i] = _candidates[i].votes;
+        }
     }
 
-    /// @notice Return voting window
-    function getVotingWindow() external view returns (uint64, uint64) {
-        return (votingStart, votingEnd);
+    // ---------------------------- Internals ---------------------------
+
+    function _checkEligible(address voter, bytes32[] calldata proof) internal view {
+        if (voterRoot == bytes32(0)) revert NotEligible();
+        bytes32 leaf = keccak256(abi.encodePacked(voter));
+        if (!MerkleProof.verifyCalldata(proof, voterRoot, leaf)) revert NotEligible();
     }
 
-    /// @notice Return merkle root
-    function getVoterMerkleRoot() external view returns (bytes32) {
-        return voterMerkleRoot;
+    function _distanceSquared(uint8[3] memory a, uint8[3] memory b) internal pure returns (uint256 s) {
+        unchecked {
+            for (uint256 i; i < 3; ++i) {
+                int256 d = int256(uint256(a[i])) - int256(uint256(b[i]));
+                s += uint256(d * d);
+            }
+        }
+    }
+
+    function _isActive() internal view returns (bool) {
+        uint64 t = uint64(block.timestamp);
+        return t >= startTime && t <= endTime;
     }
 }

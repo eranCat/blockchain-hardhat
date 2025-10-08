@@ -119,11 +119,35 @@ export function AdminPanel() {
             await writeContractAsync({
                 address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
                 abi: votingABI,
-                functionName: 'setWindow', // <-- your working name
+                functionName: 'startElection', // <-- changed from setWindow
                 args: [BigInt(start), BigInt(end)],
             });
             setStartTime('');
             setEndTime('');
+        } catch (error) {
+            console.error('Transaction failed:', error);
+            setTxStatus('error');
+            alert('Transaction failed: ' + (error as Error).message);
+        }
+    };
+
+    const handleStartElectionOneDay = async () => {
+        if (!startTime) {
+            alert('Please select a start time');
+            return;
+        }
+        const start = Math.floor(new Date(startTime).getTime() / 1000);
+        const end = start + 86400; // 1 day
+        try {
+            setTxStatus('pending');
+            await writeContractAsync({
+                address: import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`,
+                abi: votingABI,
+                functionName: 'startElection',
+                args: [BigInt(start), BigInt(end)],
+            });
+            setStartTime('');
+            setEndTime(''); // optional clear
         } catch (error) {
             console.error('Transaction failed:', error);
             setTxStatus('error');
@@ -391,6 +415,45 @@ export function AdminPanel() {
                                     }}
                                 >
                                     {isPending || isConfirming ? 'Processing...' : 'Set Window'}
+                                </button>
+                            </div>
+
+                            {/* Start New Election (1 day) */}
+                            <div style={{ padding: '1rem', background: '#ffffff', borderRadius: '12px', border: '2px solid #e2e8f0' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 700, color: '#2d3748' }}>
+                                    Start New Election (1 day)
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    value={startTime}
+                                    onChange={(e) => setStartTime(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem',
+                                        marginBottom: '0.5rem',
+                                        border: '2px solid #cbd5e0',
+                                        borderRadius: '6px',
+                                        fontSize: '0.75rem',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                <button
+                                    onClick={handleStartElectionOneDay}
+                                    disabled={isPending || isConfirming}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem',
+                                        background: 'linear-gradient(135deg, #ed8936 0%, #dd6b20 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 700,
+                                        cursor: isPending || isConfirming ? 'not-allowed' : 'pointer',
+                                        opacity: isPending || isConfirming ? 0.6 : 1
+                                    }}
+                                >
+                                    {isPending || isConfirming ? 'Processing...' : 'Start New Election (1 Day)'}
                                 </button>
                             </div>
                         </div>

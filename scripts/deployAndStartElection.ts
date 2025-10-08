@@ -1,151 +1,139 @@
 // scripts/deployAndStartElection.ts
-import 'dotenv/config';
-import { ethers } from 'hardhat';
-import { getAddress } from 'ethers';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { StandardMerkleTree } from '@openzeppelin/merkle-tree';
+import { ethers } from "hardhat";
+import { copyABIs } from "./extractABI";
 
-async function writeJson(file: string, data: unknown) {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, JSON.stringify(data, null, 2));
+type Pos3 = [number, number, number];
+
+const oneToken = (n: number | string) => ethers.parseUnits(n.toString(), 18);
+
+// ---------- ENV parsing ----------
+function parseNames(): string[] {
+    const raw = process.env.CANDIDATE_NAMES?.trim();
+    return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : ["Alice", "Bob", "Charlie"];
 }
-
-function parseAddresses(src?: string) {
-    if (!src) throw new Error('VOTER_ADDRESSES is required (comma/space separated addresses)');
-    const list = src
-        .split(/[,\s]+/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .map(a => getAddress(a));
-    if (list.length === 0) throw new Error('VOTER_ADDRESSES is empty');
-    return Array.from(new Set(list));
+function parseUris(): string[] {
+    const raw = process.env.CANDIDATE_URIS?.trim();
+    return raw
+        ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+        : ["ipfs://QmAlice.json", "ipfs://QmBob.json", "ipfs://QmCharlie.json"];
 }
-
-async function copyABIsToFrontend() {
-    const pairs = [
-        ['artifacts/contracts/Voting.sol/Voting.json', 'frontend/src/contracts/Voting.json'],
-        ['artifacts/contracts/BALToken.sol/BALToken.json', 'frontend/src/contracts/BALToken.json'],
-        ['artifacts/contracts/CandidateNFT.sol/CandidateNFT.json', 'frontend/src/contracts/CandidateNFT.json'],
-    ];
-    for (const [src, dst] of pairs) {
-        const absSrc = path.resolve(src);
-        const absDst = path.resolve(dst);
-        await fs.mkdir(path.dirname(absDst), { recursive: true });
-        // ignore errors if artifact missing
-        try {
-            await fs.copyFile(absSrc, absDst);
-        } catch {
-            // skip
-        }
-    }
+function parsePos(): Pos3[] {
+    const raw = process.env.CANDIDATE_POS?.trim();
+    if (!raw) return [[3, 7, 5], [7, 3, 8], [5, 5, 3]];
+    return raw.split(";").map((chunk) => {
+        const p = chunk.split("|").map((n) => Number(n.trim()));
+        if (p.length !== 3) throw new Error(`Bad CANDIDATE_POS chunk: "${chunk}"`);
+        p.forEach((x) => {
+            if (!Number.isInteger(x) || x < 0 || x > 10) throw new Error(`positions must be 0..10, got ${x}`);
+        });
+        return [p[0], p[1], p[2]] as Pos3;
+    });
+}
+function parseReceivers(fallback: string): string[] {
+    const raw = process.env.CANDIDATE_RECEIVERS?.trim();
+    if (!raw) return [];
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 async function main() {
-    const voters = parseAddresses(process.env.VOTER_ADDRESSES);
-    const values: [string][] = voters.map(v => [v]);
-    const tree = StandardMerkleTree.of(values, ['address']);
-    const root = tree.root as `0x${string}`;
-
-    const proofs: Record<string, string[]> = {};
-    for (const [i, v] of tree.entries()) {
-        const addr = getAddress((v as [string])[0]);
-        proofs[addr] = tree.getProof(i);
-    }
-
-    const outDir = path.resolve('data/proofs');
-    await writeJson(path.join(outDir, 'tree.json'), tree.dump());
-    await writeJson(path.join(outDir, 'proofs.json'), { root, proofs });
-
-    const [deployer] = await ethers.getSigners();
-    console.log('Deployer:', await deployer.getAddress());
-
-    // 1) Deploy or reuse BALToken
-    let balAddress = process.env.VITE_BAL_TOKEN_CONTRACT_ADDRESS_SEPOLIA || process.env.BAL_TOKEN_ADDR_SEPOLIA || process.env.BAL_TOKEN_ADDR;
-    const rewardPerVote = process.env.REWARD_PER_VOTE || '0';
-
-    if (!balAddress) {
-        console.log('No BAL token address provided in env — deploying BALToken with constructor args...');
-        const BalFactory = await ethers.getContractFactory('BALToken');
-        // README expects: BALToken("Ballot Token", "BAL", YOUR_ADDRESS)
-        const bal = await BalFactory.deploy('Ballot Token', 'BAL', await deployer.getAddress());
-        // ethers v6: wait for deployment
-        if ((bal as any).waitForDeployment) {
-            await (bal as any).waitForDeployment();
-        } else if ((bal as any).deployed) {
-            await (bal as any).deployed();
-        }
-        balAddress = await bal.getAddress();
-        console.log('Deployed BALToken at:', balAddress);
-    } else {
-        console.log('Using BAL token from env:', balAddress);
-    }
-
-    // 2) Try deploy CandidateNFT (optional)
-    let candidateNftAddress: string | undefined;
     try {
-        const CFactory = await ethers.getContractFactory('CandidateNFT');
-        const cand = await CFactory.deploy();
-        if ((cand as any).waitForDeployment) {
-            await (cand as any).waitForDeployment();
-        } else if ((cand as any).deployed) {
-            await (cand as any).deployed();
+        const [deployer] = await ethers.getSigners();
+        console.log("Deployer:", deployer.address);
+
+        // 1) Deploy BALToken
+        const BAL = await ethers.getContractFactory("BALToken");
+        const bal = await BAL.deploy("Ballot Token", "BAL", deployer.address);
+        await bal.waitForDeployment();
+
+        // 2) Deploy CandidateNFT (creator = deployer)
+        const CNFT = await ethers.getContractFactory("CandidateNFT");
+        const cnft = await CNFT.deploy(deployer.address);
+        await cnft.waitForDeployment();
+
+        // 3) Deploy Voting
+        const rewardWhole = process.env.REWARD_PER_VOTE ?? "10";
+        const rewardPerVote = oneToken(rewardWhole);
+        const Voting = await ethers.getContractFactory("Voting");
+        const voting = await Voting.deploy(await bal.getAddress(), await cnft.getAddress(), rewardPerVote);
+        await voting.waitForDeployment();
+
+        // 4) Grant MINTER_ROLEs
+        const MINTER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE"));
+        await (await bal.grantRole(MINTER_ROLE, await voting.getAddress())).wait();
+        await (await cnft.grantRole(MINTER_ROLE, await voting.getAddress())).wait();
+
+        // 5) Set candidates + mint NFTs
+        const names = parseNames();
+        const uris = parseUris();
+        const pos = parsePos();
+        if (!(names.length === uris.length && names.length === pos.length)) {
+            throw new Error("names/uris/pos length mismatch");
         }
-        candidateNftAddress = await cand.getAddress();
-        console.log('Deployed CandidateNFT at:', candidateNftAddress);
-    } catch {
-        console.log('CandidateNFT not found or skipped.');
+        const receivers = parseReceivers(deployer.address);
+        const recs = names.map((_, i) => receivers[i] ?? deployer.address);
+
+        await (
+            await voting.setCandidatesWithNFT(
+                names,
+                pos as unknown as [number, number, number][],
+                uris,
+                recs
+            )
+        ).wait();
+        console.log(`✅ Candidates set & NFTs minted: ${names.join(", ")}`);
+
+        // 6) Start election
+        const startOffset = Number(process.env.ELECTION_START_OFFSET_SEC ?? 60);
+        const duration = Number(process.env.ELECTION_DURATION_SEC ?? 86400); // 1 day
+        if (!Number.isFinite(startOffset) || !Number.isFinite(duration) || startOffset < 0 || duration <= 0) {
+            throw new Error("Bad election timing envs");
+        }
+        const now = Math.floor(Date.now() / 1000);
+        const startTs = now + startOffset;
+        const endTs = startTs + duration;
+        await (await voting.startElection(startTs, endTs)).wait();
+
+        // 7) Optional: set Merkle root
+        const root = process.env.VOTER_MERKLE_ROOT;
+        if (root && /^0x[0-9a-fA-F]{64}$/.test(root)) {
+            await (await voting.setVoterRoot(root as `0x${string}`)).wait();
+            console.log("✅ Merkle root set:", root);
+        } else {
+            console.log("ℹ️  VOTER_MERKLE_ROOT not provided or invalid; voters not eligible yet.");
+        }
+
+        // 8) Copy ABIs (TS-only)
+        await copyABIs();
+        console.log("✅ ABIs copied.");
+
+        // 9) Summary + ENVs
+        const balAddr = await bal.getAddress();
+        const cnftAddr = await cnft.getAddress();
+        const voteAddr = await voting.getAddress();
+
+        console.log("\n--- Election summary ---");
+        console.log("Contract (Voting):", voteAddr);
+        console.log("BAL token addr:", balAddr);
+        console.log("NFT addr:", cnftAddr);
+        console.log("Voting window (unix):", startTs, "->", endTs);
+        console.log(
+            "Voting window (UTC):",
+            new Date(startTs * 1000).toISOString(),
+            "->",
+            new Date(endTs * 1000).toISOString()
+        );
+        console.log("Reward per vote (BAL):", rewardWhole);
+
+        console.log("\n--- .env lines to copy ---");
+        console.log("VOTER_MERKLE_ROOT=", root ?? "(generate & fill)");
+        console.log("VITE_BAL_TOKEN_CONTRACT_ADDRESS_SEPOLIA=", balAddr);
+        console.log("VITE_NFT_CONTRACT_ADDRESS_SEPOLIA=", cnftAddr);
+        console.log("VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=", voteAddr);
+    } catch (err) {
+        console.error("❌ Deployment failed:", (err as Error).message);
+        console.error(err);
+        process.exit(1);
     }
-
-    // 3) Deploy Voting with correct args (balAddress, rewardPerVote)
-    console.log('Deploying Voting with args: (balAddress, rewardPerVote)');
-    const VotingFactory = await ethers.getContractFactory('Voting');
-    const voting = await VotingFactory.deploy(balAddress, rewardPerVote);
-    if ((voting as any).waitForDeployment) {
-        await (voting as any).waitForDeployment();
-    } else if ((voting as any).deployed) {
-        await (voting as any).deployed();
-    }
-    const votingAddr = await voting.getAddress();
-    console.log('Voting deployed to:', votingAddr);
-
-    // 4) Start election (start, end, names, positions, root)
-    const now = Math.floor(Date.now() / 1000);
-    const start = Number(process.env.ELECTION_START_TS || now + Number(process.env.ELECTION_START_OFFSET_SEC || 60));
-    const end = Number(process.env.ELECTION_END_TS || start + Number(process.env.ELECTION_DURATION_SEC || 3600)); // default 1 hour
-    const names = (process.env.CANDIDATE_NAMES?.split(',').map(s => s.trim()).filter(Boolean)) ?? ['Alice', 'Bob', 'Charlie'];
-    const positions: [number, number, number][] = process.env.CANDIDATE_POSITIONS_JSON
-        ? (JSON.parse(process.env.CANDIDATE_POSITIONS_JSON) as [number, number, number][])
-        : [
-            [4, 6, 5],
-            [6, 4, 5],
-            [5, 5, 6],
-        ];
-
-    console.log('Starting election:', { start, end, names, root });
-    const tx = await voting.startNewElection(start, end, names, positions, root);
-    await tx.wait();
-    console.log('Election started.');
-
-    // 5) Print env lines and copy ABIs
-    console.log('\n=== Add to .env ===');
-    console.log(`VOTING_ADDR_SEPOLIA=${votingAddr}`);
-    console.log(`VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=${votingAddr}`);
-    console.log(`VITE_BAL_TOKEN_CONTRACT_ADDRESS_SEPOLIA=${balAddress}`);
-    if (candidateNftAddress) console.log(`VITE_NFT_CONTRACT_ADDRESS_SEPOLIA=${candidateNftAddress}`);
-    console.log(`VOTER_MERKLE_ROOT=${root}`);
-    console.log(`REWARD_PER_VOTE=${rewardPerVote}`);
-    console.log('===================');
-
-    await copyABIsToFrontend();
-    console.log('ABIs copied (if artifacts existed).');
-
-    console.log('\nProofs written to:', path.join(outDir, 'proofs.json'));
 }
 
-main()
-    .then(() => process.exit(0))
-    .catch(err => {
-        console.error('Script failed:', err);
-        process.exit(1);
-    });
+main();
