@@ -77,13 +77,10 @@ export interface VotingInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "candidateCountView",
+    functionFragment: "currentElectionId",
     values?: undefined
   ): string;
-  encodeFunctionData(
-    functionFragment: "candidates",
-    values: [BigNumberish]
-  ): string;
+  encodeFunctionData(functionFragment: "endTime", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "getAllCandidates",
     values?: undefined
@@ -110,7 +107,7 @@ export interface VotingInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "isActive", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "lastVotedSession",
+    functionFragment: "lastVotedElection",
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
@@ -140,10 +137,9 @@ export interface VotingInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "setRewardPerVote",
-    values: [BigNumberish]
+    functionFragment: "setVoterRoot",
+    values: [BytesLike]
   ): string;
-  encodeFunctionData(functionFragment: "setRoot", values: [BytesLike]): string;
   encodeFunctionData(
     functionFragment: "startElection",
     values: [BigNumberish, BigNumberish]
@@ -174,10 +170,10 @@ export interface VotingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "candidateCountView",
+    functionFragment: "currentElectionId",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "candidates", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "endTime", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getAllCandidates",
     data: BytesLike
@@ -198,7 +194,7 @@ export interface VotingInterface extends Interface {
   decodeFunctionResult(functionFragment: "hasVoted", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "isActive", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "lastVotedSession",
+    functionFragment: "lastVotedElection",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
@@ -223,13 +219,14 @@ export interface VotingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setRewardPerVote",
+    functionFragment: "setVoterRoot",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "startElection",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "startTime", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
     data: BytesLike
@@ -422,24 +419,14 @@ export interface Voting extends BaseContract {
 
   candidateNft: TypedContractMethod<[], [string], "view">;
 
-  candidateCountView: TypedContractMethod<[], [bigint], "view">;
+  currentElectionId: TypedContractMethod<[], [bigint], "view">;
 
-  candidates: TypedContractMethod<
-    [arg0: BigNumberish],
-    [
-      [string, bigint, boolean] & {
-        name: string;
-        votes: bigint;
-        exists: boolean;
-      }
-    ],
-    "view"
-  >;
+  endTime: TypedContractMethod<[], [bigint], "view">;
 
   getAllCandidates: TypedContractMethod<
     [],
     [
-      [string[], [bigint, bigint, bigint][], bigint[], boolean[]] & {
+      [string[], [bigint, bigint, bigint][], bigint[]] & {
         names: string[];
         pos: [bigint, bigint, bigint][];
         votes: bigint[];
@@ -488,7 +475,7 @@ export interface Voting extends BaseContract {
 
   isActive: TypedContractMethod<[], [boolean], "view">;
 
-  lastVotedSession: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+  lastVotedElection: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   owner: TypedContractMethod<[], [string], "view">;
 
@@ -571,24 +558,14 @@ export interface Voting extends BaseContract {
     nameOrSignature: "currentElectionId"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "candidates"
-  ): TypedContractMethod<
-    [arg0: BigNumberish],
-    [
-      [string, bigint, boolean] & {
-        name: string;
-        votes: bigint;
-        exists: boolean;
-      }
-    ],
-    "view"
-  >;
+    nameOrSignature: "endTime"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "getAllCandidates"
   ): TypedContractMethod<
     [],
     [
-      [string[], [bigint, bigint, bigint][], bigint[], boolean[]] & {
+      [string[], [bigint, bigint, bigint][], bigint[]] & {
         names: string[];
         pos: [bigint, bigint, bigint][];
         votes: bigint[];
@@ -643,7 +620,7 @@ export interface Voting extends BaseContract {
     nameOrSignature: "isActive"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "lastVotedSession"
+    nameOrSignature: "lastVotedElection"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "owner"
@@ -673,8 +650,8 @@ export interface Voting extends BaseContract {
     nameOrSignature: "setRewardPerVote"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "setRoot"
-  ): TypedContractMethod<[_root: BytesLike], [void], "nonpayable">;
+    nameOrSignature: "setVoterRoot"
+  ): TypedContractMethod<[root: BytesLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "startElection"
   ): TypedContractMethod<
@@ -682,6 +659,9 @@ export interface Voting extends BaseContract {
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "startTime"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
@@ -703,7 +683,7 @@ export interface Voting extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "voterMerkleRoot"
+    nameOrSignature: "voterRoot"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "winnerId"
@@ -754,9 +734,9 @@ export interface Voting extends BaseContract {
   getEvent(
     key: "Voted"
   ): TypedContractEvent<
-    RewardPerVoteSetEvent.InputTuple,
-    RewardPerVoteSetEvent.OutputTuple,
-    RewardPerVoteSetEvent.OutputObject
+    VotedEvent.InputTuple,
+    VotedEvent.OutputTuple,
+    VotedEvent.OutputObject
   >;
   getEvent(
     key: "VoterRootUpdated"

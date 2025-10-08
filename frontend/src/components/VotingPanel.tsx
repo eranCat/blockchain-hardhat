@@ -1,141 +1,209 @@
+// frontend/src/components/VotingPanel.tsx
 import {
     useAccount,
     useReadContract,
+    useReadContracts,
     useSimulateContract,
     useWaitForTransactionReceipt,
     useWatchContractEvent,
     useWriteContract,
-} from 'wagmi'
-import { sepolia } from 'wagmi/chains'
-import { BaseError, decodeErrorResult } from 'viem'
-import { useEffect, useMemo, useState } from 'react'
-import { votingABI } from '../contracts'
-import { ProofUpload } from './ProofUpload'
+} from 'wagmi';
+import { sepolia } from 'wagmi/chains';
+import { BaseError, decodeErrorResult, type Hex } from 'viem';
+import { useEffect, useMemo, useState } from 'react';
+import { votingABI } from '../contracts';
+import { ProofUpload } from './ProofUpload';
 
-const VOTING_ADDRESS = import.meta.env.VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`
+const VOTING_ADDRESS = import.meta.env
+    .VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`;
 
 export function VotingPanel({ isMobile = false }: { isMobile?: boolean }) {
-    const { address } = useAccount()
+    const { address } = useAccount();
 
-    const [proofData, setProofData] = useState<`0x${string}`[] | null>(null)
-    const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null)
-    const [uploadedRoot, setUploadedRoot] = useState<string | null>(null)
-    const [votedName, setVotedName] = useState<string | null>(null)
+    const [proofData, setProofData] = useState<Hex[] | null>(null);
+    const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
+    const [uploadedRoot, setUploadedRoot] = useState<string | null>(null);
+    const [votedName, setVotedName] = useState<string | null>(null);
 
+    // ---------------- reads ----------------
     const { data: candidatesData } = useReadContract({
         address: VOTING_ADDRESS,
         abi: votingABI,
         functionName: 'getAllCandidates',
-        query: { refetchInterval: 15000 },
-    })
+        query: { refetchInterval: 15_000 },
+    });
 
-    const {
-        data: hasVoted,
-        refetch: refetchHasVoted,
-    } = useReadContract({
+    const { data: hasVoted, refetch: refetchHasVoted } = useReadContract({
         address: VOTING_ADDRESS,
         abi: votingABI,
         functionName: 'hasVoted',
         args: address ? [address] : undefined,
-        query: { enabled: !!address, refetchInterval: 8000 },
-    })
+        query: { enabled: !!address, refetchInterval: 8_000 },
+    });
 
     const { data: onChainRoot } = useReadContract({
         address: VOTING_ADDRESS,
         abi: votingABI,
         functionName: 'voterRoot',
-    })
+    });
 
-    const { data: endTs } = useReadContract({
+    // Try getVotingWindow() + isActive first (newer contracts) …
+    const winActive = useReadContracts({
+        contracts: [
+            { address: VOTING_ADDRESS, abi: votingABI, functionName: 'getVotingWindow' as const }, // (uint64,uint64)
+            { address: VOTING_ADDRESS, abi: votingABI, functionName: 'isActive' as const },
+        ],
+        query: { refetchInterval: 10_000 },
+    });
+
+    // …and fallback to legacy fields (older contracts)
+    const legacyStart = useReadContract({
+        address: VOTING_ADDRESS,
+        abi: votingABI,
+        functionName: 'startTime',
+        query: { refetchInterval: 10_000 },
+    });
+    const legacyEnd = useReadContract({
         address: VOTING_ADDRESS,
         abi: votingABI,
         functionName: 'endTime',
-    })
+        query: { refetchInterval: 10_000 },
+    });
+    const legacyActive = useReadContract({
+        address: VOTING_ADDRESS,
+        abi: votingABI,
+        functionName: 'isActive',
+        query: { refetchInterval: 10_000 },
+    });
 
+    // Prefer new helper if available; otherwise use legacy reads
+    const winOk = !!winActive.data?.[0]?.result && !winActive.error;
+    const startTs = (winOk
+        ? (winActive.data?.[0]?.result as [bigint, bigint])[0]
+        : (legacyStart.data as bigint | undefined)) ?? undefined;
+
+    const endTs = (winOk
+        ? (winActive.data?.[0]?.result as [bigint, bigint])[1]
+        : (legacyEnd.data as bigint | undefined)) ?? undefined;
+
+    const isActive = (winOk
+        ? (winActive.data?.[1]?.result as boolean | undefined)
+        : (legacyActive.data as boolean | undefined)) ?? false;
+
+    const anyWindowErr =
+        (!winOk && (legacyStart.error || legacyEnd.error)) || winActive.error;
+
+    // ---------------- derived ----------------
     const electionStorageKey = useMemo(
         () => `lastVote:${VOTING_ADDRESS}:${endTs ? Number(endTs) : 'unknown'}`,
         [endTs]
-    )
+    );
 
     useEffect(() => {
         if (hasVoted) {
-            const saved = localStorage.getItem(electionStorageKey)
-            if (saved) setVotedName(saved)
+            const saved = localStorage.getItem(electionStorageKey);
+            if (saved) setVotedName(saved);
         } else {
-            setVotedName(null)
+            setVotedName(null);
         }
-    }, [hasVoted, electionStorageKey])
+    }, [hasVoted, electionStorageKey]);
 
     useWatchContractEvent({
         address: VOTING_ADDRESS,
         abi: votingABI,
         eventName: 'Voted',
         onLogs: logs => {
-            if (!address) return
-            const mine = logs.some(l => (l as any).args?.voter?.toLowerCase?.() === address.toLowerCase())
-            if (mine) refetchHasVoted()
+            if (!address) return;
+            const mine = logs.some(l => (l as any).args?.voter?.toLowerCase?.() === address.toLowerCase());
+            if (mine) refetchHasVoted();
         },
-    })
+    });
 
     const names: string[] = useMemo(() => {
-        const res = candidatesData as [string[], number[][], bigint[]] | undefined
-        return res?.[0] ?? []
-    }, [candidatesData])
+        const res = candidatesData as [string[], number[][], bigint[]] | undefined;
+        return res?.[0] ?? [];
+    }, [candidatesData]);
 
-    const rootMismatch = !!uploadedRoot && !!onChainRoot && uploadedRoot !== onChainRoot
+    const rootMismatch = !!uploadedRoot && !!onChainRoot && uploadedRoot !== onChainRoot;
 
-    const simEnabled = selectedCandidate !== null && !!proofData && !rootMismatch && !hasVoted
+    // ---------------- simulate ----------------
+    const simEnabled =
+        selectedCandidate !== null &&
+        !!proofData &&
+        !rootMismatch &&
+        !hasVoted &&
+        !!isActive;
+
     const { data: sim, error: simError } = useSimulateContract({
         address: VOTING_ADDRESS,
         abi: votingABI,
         functionName: 'vote',
-        args: simEnabled ? [BigInt(selectedCandidate as number), proofData as `0x${string}`[]] : undefined,
+        args: simEnabled ? [BigInt(selectedCandidate as number), proofData as Hex[]] : undefined,
         query: { enabled: simEnabled },
-    })
+    });
 
-    const { writeContract, data: hash, isPending: isWalletOpen, error: writeErr } = useWriteContract()
+    // ---------------- write ----------------
+    const { writeContract, data: hash, isPending: isWalletOpen, error: writeErr } = useWriteContract();
     const {
         data: receipt,
         isLoading: isConfirming,
         isSuccess: isConfirmed,
         isError: isReceiptError,
         error: receiptErr,
-    } = useWaitForTransactionReceipt({ hash, chainId: sepolia.id, confirmations: 1 })
+    } = useWaitForTransactionReceipt({ hash, chainId: sepolia.id, confirmations: 1 });
 
     useEffect(() => {
         if (isConfirmed) {
-            const name = selectedCandidate !== null ? names[selectedCandidate] : null
+            const name = selectedCandidate !== null ? names[selectedCandidate] : null;
             if (name) {
-                localStorage.setItem(electionStorageKey, name)
-                setVotedName(name)
+                localStorage.setItem(electionStorageKey, name);
+                setVotedName(name);
             }
-            setSelectedCandidate(null)
-            setProofData(null)
-            setUploadedRoot(null)
-            refetchHasVoted()
+            setSelectedCandidate(null);
+            setProofData(null);
+            setUploadedRoot(null);
+            refetchHasVoted();
         }
-    }, [isConfirmed, names, selectedCandidate, electionStorageKey, refetchHasVoted])
+    }, [isConfirmed, names, selectedCandidate, electionStorageKey, refetchHasVoted]);
 
+    // ---------------- error decode (Hex-safe) ----------------
     const extractRevert = (err: unknown) => {
-        const e = err as BaseError & { cause?: any }
-        const data =
+        const e = err as BaseError & { cause?: any };
+        const raw =
             e?.cause?.data?.data ??
             e?.cause?.data ??
-            (typeof (e as any).data === 'string' ? (e as any).data : undefined)
-        try {
-            if (typeof data === 'string' && data.startsWith('0x')) {
-                const decoded = decodeErrorResult({ abi: votingABI, data })
-                return decoded.errorName || e.shortMessage || e.message
-            }
-        } catch { }
-        return e?.shortMessage || e?.message || 'Unknown error'
-    }
+            (typeof (e as any).data === 'string' ? (e as any).data : undefined);
+
+        const hex: Hex | null =
+            typeof raw === 'string' && raw.startsWith('0x') ? (raw as Hex) : null;
+
+        if (hex) {
+            try {
+                const decoded = decodeErrorResult({ abi: votingABI, data: hex });
+                return decoded.errorName || e.shortMessage || e.message;
+            } catch { /* ignore */ }
+        }
+        return e?.shortMessage || e?.message || 'Unknown error';
+    };
 
     const txErrorText =
         (simError && extractRevert(simError)) ||
         (writeErr && extractRevert(writeErr)) ||
         (receiptErr && extractRevert(receiptErr)) ||
-        ''
+        '';
+
+    // ---------------- gating ----------------
+    const nowSec = Math.floor(Date.now() / 1000);
+    const s = startTs ? Number(startTs) : undefined;
+    const e = endTs ? Number(endTs) : undefined;
+
+    const notActiveReason = isActive
+        ? ''
+        : s && nowSec < s
+            ? 'Election has not started yet.'
+            : e && nowSec > e
+                ? 'Election has ended.'
+                : 'Election is not active.';
 
     const canSubmit =
         !!address &&
@@ -145,25 +213,26 @@ export function VotingPanel({ isMobile = false }: { isMobile?: boolean }) {
         !isWalletOpen &&
         !isConfirming &&
         !simError &&
-        !hasVoted
+        !hasVoted &&
+        !!isActive;
 
     const handleVote = async () => {
-        if (!address || selectedCandidate === null || !proofData || rootMismatch || hasVoted) return
-        if (sim?.request) return writeContract(sim.request)
+        if (!address || selectedCandidate === null || !proofData || rootMismatch || hasVoted || !isActive) return;
+        if (sim?.request) return writeContract(sim.request);
         await writeContract({
             address: VOTING_ADDRESS,
             abi: votingABI,
             functionName: 'vote',
-            args: [BigInt(selectedCandidate), proofData],
-        })
-    }
+            args: [BigInt(selectedCandidate), proofData as Hex[]],
+        });
+    };
 
     if (!address) {
         return (
             <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.95)', borderRadius: 16, textAlign: 'center', color: '#718096' }}>
                 Connect wallet to vote
             </div>
-        )
+        );
     }
 
     if (hasVoted) {
@@ -171,7 +240,7 @@ export function VotingPanel({ isMobile = false }: { isMobile?: boolean }) {
             <div style={{ padding: '1.5rem', background: 'linear-gradient(135deg,#c6f6d5,#9ae6b4)', borderRadius: 16, textAlign: 'center', color: '#22543d', fontWeight: 700 }}>
                 {votedName ? `You voted to ${votedName}` : 'You have already voted'}
             </div>
-        )
+        );
     }
 
     return (
@@ -180,12 +249,26 @@ export function VotingPanel({ isMobile = false }: { isMobile?: boolean }) {
                 Cast Your Vote
             </h2>
 
+            {anyWindowErr && (
+                <div style={{ padding: 12, background: '#fde8e8', color: '#9b2c2c', borderRadius: 8, marginBottom: 12, fontWeight: 700 }}>
+                    Error loading election status: {(anyWindowErr as Error).message}
+                </div>
+            )}
+
+            {!isActive && (
+                <div style={{ padding: 12, background: '#fff3cd', color: '#7f5f00', borderRadius: 8, marginBottom: 12, fontWeight: 700 }}>
+                    {notActiveReason}
+                    {s ? ` Starts: ${new Date(s * 1000).toLocaleString()}` : ''}{' '}
+                    {e ? ` Ends: ${new Date(e * 1000).toLocaleString()}` : ''}
+                </div>
+            )}
+
             {!proofData ? (
                 <ProofUpload address={address} onProofLoaded={setProofData} onRoot={setUploadedRoot} />
             ) : (
                 <>
                     <div style={{ padding: 12, background: '#e6fffa', color: '#234e52', borderRadius: 8, marginBottom: 12 }}>
-                        Proof verified - Select a candidate
+                        Proof loaded – select a candidate
                     </div>
 
                     {rootMismatch && (
@@ -196,7 +279,7 @@ export function VotingPanel({ isMobile = false }: { isMobile?: boolean }) {
 
                     {(simError || writeErr || isReceiptError) && !rootMismatch && (
                         <div style={{ padding: 12, background: '#fde8e8', color: '#9b2c2c', borderRadius: 8, marginBottom: 12, fontWeight: 700 }}>
-                            {txErrorText || 'Transaction would revert'}
+                            {txErrorText || 'The contract function "vote" reverted.'}
                         </div>
                     )}
 
@@ -281,5 +364,5 @@ export function VotingPanel({ isMobile = false }: { isMobile?: boolean }) {
                 </>
             )}
         </div>
-    )
+    );
 }
