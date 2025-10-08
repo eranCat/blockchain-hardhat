@@ -21,7 +21,7 @@ export function ElectionResults() {
     const { data: endTs } = useReadContract({
         address: VOTING_ADDRESS,
         abi: votingABI,
-        functionName: 'endTime',
+        functionName: 'votingEnd',
         query: { refetchInterval: 60000 },
     })
 

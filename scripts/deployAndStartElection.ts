@@ -1,110 +1,81 @@
 // scripts/deployAndStartElection.ts
-import 'dotenv/config'
-import { ethers } from 'hardhat'
-import { getAddress } from 'ethers'
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
+import { ethers } from "hardhat";
+import * as fs from "fs";
+import * as path from "path";
 
-async function writeJson(file: string, data: unknown) {
-    await fs.mkdir(path.dirname(file), { recursive: true })
-    await fs.writeFile(file, JSON.stringify(data, null, 2))
-}
+type Hex = `0x${string}`;
+type StandardV1 = { format: "standard-v1"; tree: Hex[] };
+type ProofMapFile = { root: Hex; proofs?: Record<string, Hex[]> };
 
-function parseAddresses(src?: string) {
-    if (!src) throw new Error('VOTER_ADDRESSES is required (comma/space separated addresses)')
-    const list = src
-        .split(/[,\s]+/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .map(a => getAddress(a))
-    if (list.length === 0) throw new Error('VOTER_ADDRESSES is empty')
-    return Array.from(new Set(list))
-}
-
-async function copyABIsToFrontend() {
-    const pairs = [
-        ['artifacts/contracts/Voting.sol/Voting.json', 'frontend/src/contracts/Voting.json'],
-        ['artifacts/contracts/BALToken.sol/BALToken.json', 'frontend/src/contracts/BALToken.json'],
-        ['artifacts/contracts/CandidateNFT.sol/CandidateNFT.json', 'frontend/src/contracts/CandidateNFT.json'],
-    ]
-    for (const [src, dst] of pairs) {
-        const absSrc = path.resolve(src)
-        const absDst = path.resolve(dst)
-        await fs.mkdir(path.dirname(absDst), { recursive: true })
-        await fs.copyFile(absSrc, absDst)
+function tryLoadRoot(): Hex | null {
+    const p = path.resolve("data", "proofs", "proofs.json");
+    if (!fs.existsSync(p)) return null;
+    const obj = JSON.parse(fs.readFileSync(p, "utf8")) as any;
+    if (obj?.format === "standard-v1" && Array.isArray(obj.tree) && obj.tree[0]) {
+        return obj.tree[0] as Hex;
     }
+    if (typeof obj?.root === "string" && obj.root.startsWith("0x")) {
+        return obj.root as Hex;
+    }
+    return null;
 }
 
 async function main() {
-    const voters = parseAddresses(process.env.VOTER_ADDRESSES)
-    const values: [string][] = voters.map(v => [v])
-    const tree = StandardMerkleTree.of(values, ['address'])
-    const root = tree.root as `0x${string}`
+    const [deployer] = await ethers.getSigners();
+    console.log("Deployer:", deployer.address);
 
-    const proofs: Record<string, string[]> = {}
-    for (const [i, v] of tree.entries()) {
-        const addr = getAddress((v as [string])[0])
-        proofs[addr] = tree.getProof(i)
+    const BAL = await ethers.getContractFactory("BALToken");
+    const bal = await BAL.deploy();
+    await bal.waitForDeployment();
+
+    const NFT = await ethers.getContractFactory("CandidateNFT");
+    const nft = await NFT.deploy(deployer.address);
+    await nft.waitForDeployment();
+
+    const Voting = await ethers.getContractFactory("Voting");
+    const reward = 10n; // BAL per vote
+    const voting = await Voting.deploy(await bal.getAddress(), await nft.getAddress(), reward);
+    await voting.waitForDeployment();
+
+    // set minter if your BAL/NFT require it (call your own method as needed)
+    // e.g., await bal.setMinter(await voting.getAddress());
+
+    // candidates
+    const names = ["Alice", "Bob", "Charlie"];
+    const pos: [number, number, number][] = [
+        [5, 6, 4],
+        [8, 3, 7],
+        [2, 9, 5],
+    ];
+    const uris = names.map((n) => `ipfs://${n.toLowerCase()}`);
+    const receivers = [deployer.address, deployer.address, deployer.address];
+    await (await voting.setCandidatesWithNFT(names, pos as any, uris, receivers)).wait();
+
+    // voter root (prefer standard-v1/file if available)
+    const fileRoot = tryLoadRoot();
+    if (fileRoot) {
+        await (await voting.setVoterRoot(fileRoot)).wait();
+        console.log("✅ Merkle root set from file:", fileRoot);
+    } else if (process.env.VOTER_MERKLE_ROOT) {
+        const root = process.env.VOTER_MERKLE_ROOT as Hex;
+        await (await voting.setVoterRoot(root)).wait();
+        console.log("✅ Merkle root set from env:", root);
+    } else {
+        console.log("⚠️  No voter root provided (file/env).");
     }
 
-    const outDir = path.resolve('data/proofs')
-    await writeJson(path.join(outDir, 'tree.json'), tree.dump())
-    await writeJson(path.join(outDir, 'proofs.json'), { root, proofs })
+    // 1-day window by default
+    const now = Math.floor(Date.now() / 1000);
+    const start = BigInt(now + 60);        // start in 1 min
+    const end = start + BigInt(86400);     // +1 day
+    await (await voting.startElection(start, end)).wait();
 
-    const Voting = await ethers.getContractFactory('Voting')
-
-    let voting: any
-    try {
-        voting = await Voting.deploy()
-    } catch {
-        const [deployer] = await ethers.getSigners()
-        voting = await Voting.deploy(await deployer.getAddress())
-    }
-    await voting.deploymentTransaction()?.wait()
-    const votingAddr: `0x${string}` = await voting.getAddress()
-
-    const names =
-        process.env.CANDIDATE_NAMES?.split(',').map(s => s.trim()).filter(Boolean) ??
-        ['Alice', 'Bob', 'Charlie']
-
-    const positions: [number, number, number][] = process.env.CANDIDATE_POSITIONS_JSON
-        ? (JSON.parse(process.env.CANDIDATE_POSITIONS_JSON) as [number, number, number][])
-        : [
-            [4, 6, 5],
-            [6, 4, 5],
-            [5, 5, 6],
-        ]
-
-    if (names.length === 0) throw new Error('No candidate names provided')
-    if (positions.length !== names.length) throw new Error('CANDIDATE_POSITIONS_JSON length must match CANDIDATE_NAMES')
-
-    const now = Math.floor(Date.now() / 1000)
-    const start = Number(process.env.ELECTION_START_TS || now + Number(process.env.ELECTION_START_OFFSET_SEC ?? 60))
-    const end =
-        Number(process.env.ELECTION_END_TS) ||
-        start + Number(process.env.ELECTION_DURATION_SEC ?? 30 * 24 * 60 * 60)
-
-    const tx = await voting.startNewElection(start, end, names, positions, root)
-    await tx.wait()
-
-    const envLines = [
-        `VOTING_ADDR_SEPOLIA=${votingAddr}`,
-        `VITE_VOTING_CONTRACT_ADDRESS_SEPOLIA=${votingAddr}`,
-        `VOTER_MERKLE_ROOT=${root}`,
-    ].join('\n')
-    console.log('\n' + envLines + '\n')
-
-    await copyABIsToFrontend()
-    console.log('ABIs copied to frontend/src/contracts')
-
-    console.log('\nArtifacts written:')
-    console.log(` - ${path.join(outDir, 'tree.json')}`)
-    console.log(` - ${path.join(outDir, 'proofs.json')}`)
-    console.log('\nFrontend: restart dev server, upload data/proofs/proofs.json, then vote.')
+    console.log("\n--- Election summary ---");
+    console.log("Contract (Voting):", await voting.getAddress());
+    console.log("BAL token addr:", await bal.getAddress());
+    console.log("NFT addr:", await nft.getAddress());
+    console.log("Voting window (unix):", start.toString(), "->", end.toString());
+    console.log("Reward per vote (BAL):", reward.toString());
 }
 
-main().catch(err => {
-    console.error(err)
-    process.exit(1)
-})
+main().catch((e) => { console.error(e); process.exit(1); });

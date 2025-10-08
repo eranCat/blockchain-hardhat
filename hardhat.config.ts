@@ -3,7 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "dotenv/config";
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.30",
+  solidity: "0.8.28",
   networks: {
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "",
