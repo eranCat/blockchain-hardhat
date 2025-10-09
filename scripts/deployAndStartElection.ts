@@ -47,6 +47,15 @@ async function copyABIs(): Promise<void> {
     console.log("✅ All ABIs copied to frontend/src/contracts/");
 }
 
+// Generates a string like "[X-Y, A-B, C-D]" for suggested test ranges
+function getTestRange(pos: number[]): string {
+    return pos.map(p => {
+        const low = Math.max(0, p - 1);
+        const high = Math.min(10, p + 1);
+        return low === high ? low.toString() : `${low}-${high}`;
+    }).join(", ");
+}
+
 async function main() {
     const [deployer] = await ethers.getSigners();
     console.log("Deployer:", deployer.address);
@@ -70,7 +79,7 @@ async function main() {
     // Deploy Voting
     console.log("\n📦 Deploying Voting contract...");
     const Voting = await ethers.getContractFactory("Voting");
-    const rewardPerVote = ethers.parseEther("10"); // 10 BAL per vote
+    const rewardPerVote = ethers.parseEther("10");
     const voting = await Voting.deploy(balAddr, nftAddr, rewardPerVote);
     await voting.waitForDeployment();
     const votingAddr = await voting.getAddress();
@@ -86,46 +95,48 @@ async function main() {
     // Set up candidates with positions
     console.log("\n👥 Setting up candidates...");
 
-    // Define candidates with realistic political positions
-    // Scale: 0-10 for each dimension
-    // [Economic, Social, Foreign]
     const candidates = [
         {
-            name: "Progressive Candidate",
+            name: "Elena Vance",
+            alias: "Progressive",
             positions: [3, 8, 4] as [number, number, number],
             description: "Strong government regulation, progressive social policies, diplomatic approach",
-            uri: "ipfs://QmProgressiveCandidate123"
+            uri: "ipfs://QmElenaVance123"
         },
         {
-            name: "Conservative Candidate",
+            name: "Arthur Sterling",
+            alias: "Conservative",
             positions: [8, 2, 7] as [number, number, number],
             description: "Free market economy, traditional values, strong defense",
-            uri: "ipfs://QmConservativeCandidate456"
+            uri: "ipfs://QmArthurSterling456"
         },
         {
-            name: "Libertarian Candidate",
+            name: "Jax Ryder",
+            alias: "Libertarian",
             positions: [9, 6, 2] as [number, number, number],
             description: "Maximum economic freedom, social liberty, non-interventionist",
-            uri: "ipfs://QmLibertarianCandidate789"
+            uri: "ipfs://QmJaxRyder789"
         },
         {
-            name: "Centrist Candidate",
+            name: "David Chen",
+            alias: "Centrist",
             positions: [5, 5, 5] as [number, number, number],
             description: "Balanced approach on all policies, pragmatic solutions",
-            uri: "ipfs://QmCentristCandidate321"
+            uri: "ipfs://QmDavidChen321"
         },
         {
-            name: "Green Candidate",
+            name: "Willow Rivera",
+            alias: "Green",
             positions: [2, 7, 3] as [number, number, number],
             description: "Environmental regulation, social justice, peace-focused",
-            uri: "ipfs://QmGreenCandidate654"
+            uri: "ipfs://QmWillowRivera654"
         }
     ];
 
     console.log("\n📋 Candidate Profiles:");
     console.log("━".repeat(70));
     candidates.forEach((c, i) => {
-        console.log(`${i + 1}. ${c.name}`);
+        console.log(`${i + 1}. ${c.name} (${c.alias})`);
         console.log(`   Economic: ${c.positions[0]}/10 | Social: ${c.positions[1]}/10 | Foreign: ${c.positions[2]}/10`);
         console.log(`   ${c.description}`);
         console.log();
@@ -142,21 +153,6 @@ async function main() {
     console.log("\n💡 Voter Match Examples:");
     console.log("━".repeat(70));
     console.log("Use these position combinations to match with each candidate:");
-    console.log();
-    console.log("1. Match Progressive Candidate [3, 8, 4]:");
-    console.log("   Try: [2, 8, 3] or [4, 9, 4] (Economic liberal, Social progressive, Diplomatic)");
-    console.log();
-    console.log("2. Match Conservative Candidate [8, 2, 7]:");
-    console.log("   Try: [9, 1, 8] or [7, 3, 6] (Free market, Traditional, Strong defense)");
-    console.log();
-    console.log("3. Match Libertarian Candidate [9, 6, 2]:");
-    console.log("   Try: [10, 7, 1] or [8, 5, 3] (Maximum freedom, Social liberty, Non-intervention)");
-    console.log();
-    console.log("4. Match Centrist Candidate [5, 5, 5]:");
-    console.log("   Try: [5, 5, 5] or [4, 6, 5] (Moderate on everything)");
-    console.log();
-    console.log("5. Match Green Candidate [2, 7, 3]:");
-    console.log("   Try: [1, 8, 2] or [3, 6, 4] (Environmental focus, Social justice, Peace)");
     console.log();
 
     // Set voter Merkle root
@@ -176,8 +172,8 @@ async function main() {
     // Start election
     console.log("\n🗳️  Starting election...");
     const now = Math.floor(Date.now() / 1000);
-    const start = BigInt(now + 60);        // start in 1 minute
-    const end = start + BigInt(86400 * 7); // +7 days
+    const start = BigInt(now + 60);
+    const end = start + BigInt(86400 * 7);
     await (await voting.startElection(start, end)).wait();
 
     const startDate = new Date(Number(start) * 1000).toISOString();
@@ -185,6 +181,8 @@ async function main() {
     console.log("✅ Election started");
     console.log("   Start:", startDate);
     console.log("   End:", endDate);
+
+    await copyABIs();
 
     // Print summary
     console.log("\n" + "=".repeat(60));
@@ -211,15 +209,12 @@ async function main() {
     console.log("\n🎯 Next Steps:");
     console.log("1. Update .env files (backend and frontend)");
     console.log("2. Copy proofs.json to frontend/public/data/proofs/");
-    console.log("3. Run: npm run extract-abi (to update frontend ABIs)");
-    console.log("4. Start frontend and test voting!");
+    console.log("3. Start frontend and test voting!");
     console.log();
-    console.log("📝 Test the questionnaire with different positions:");
-    console.log("   - Progressive: [2-4, 7-9, 3-5]");
-    console.log("   - Conservative: [7-9, 1-3, 6-8]");
-    console.log("   - Libertarian: [8-10, 5-7, 1-3]");
-    console.log("   - Centrist: [4-6, 4-6, 4-6]");
-    console.log("   - Green: [1-3, 6-8, 2-4]");
+    console.log("📝 Test the questionnaire with different positions (recommended ranges):");
+    candidates.forEach(c => {
+        console.log(`   - ${c.name} (${c.alias}): [${getTestRange(c.positions)}]`);
+    });
     console.log("=".repeat(60) + "\n");
 }
 
