@@ -8,14 +8,14 @@
     "node": "hardhat node",
     "deploy": "hardhat run scripts/deployAndStartElection.ts --network hardhat",
     "deploy:sepolia": "hardhat run scripts/deployAndStartElection.ts --network sepolia",
-    "merkle": "tsx scripts/generateProofs.ts",
-    "extract-abi": "tsx scripts/extractABI.ts",
+    "generate-proofs": "node --import tsx scripts/generateProofs.ts",
+    "extract-abi": "node --import tsx scripts/extractABI.ts",
     "set-root": "hardhat run scripts/setRoot.ts --network hardhat",
     "set-root:sepolia": "hardhat run scripts/setRoot.ts --network sepolia",
     "setup-candidates": "hardhat run scripts/example-candidates-setup.ts --network hardhat",
     "setup-candidates:sepolia": "hardhat run scripts/example-candidates-setup.ts --network sepolia",
     "vote": "hardhat run scripts/directVoteSepolia.ts --network sepolia",
-    "check-status": "tsx scripts/fetchElectionStatusNode.ts",
+    "check-status": "node --import tsx scripts/fetchElectionStatusNode.ts",
     "clean": "hardhat clean"
   },
   "devDependencies": {

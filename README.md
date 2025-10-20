@@ -307,8 +307,8 @@ Decentralized voting with Merkle tree authentication, ERC-20 rewards, and NFT-ba
 ## Quick Start
 
 ```bash
-# Install
-npm install
+# Install dependencies for backend and frontend
+npm install && cd frontend && npm install && cd ..
 cd frontend && npm install && cd ..
 
 # Setup environment
@@ -485,10 +485,10 @@ SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
 SEPOLIA_PRIVATE_KEY=0xYOUR_KEY
 VOTER_ADDRESSES=0xAddr1,0xAddr2,0xAddr3
 
-# After deployment
-VOTING_ADDR_SEPOLIA=0x...
-BAL_TOKEN_ADDR_SEPOLIA=0x...
-CANDIDATE_NFT_ADDR_SEPOLIA=0x...
+# These are populated after running the deployment script
+VOTING_ADDR_SEPOLIA=
+BAL_TOKEN_ADDR_SEPOLIA=
+CANDIDATE_NFT_ADDR_SEPOLIA=
 VOTER_MERKLE_ROOT=0x...
 ```
 
